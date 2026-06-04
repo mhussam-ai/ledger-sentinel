@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ledger Sentinel · Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./tokens.css" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <a class="home-link" href="./index.html" title="Back to the landing page">←</a>
+      <span class="logo">🛡️</span>
+      <div>
+        <h1>Ledger Sentinel</h1>
+        <p class="tagline">Autonomous reconciliation · the LLM proposes, code disposes</p>
+      </div>
+    </div>
+    <div class="controls">
+      <span id="mode-badge" class="badge badge-muted">connecting…</span>
+      <label class="upload-btn">
+        <input type="file" id="file-input" multiple hidden />
+        Upload pile
+      </label>
+      <button id="run-btn" class="run-btn" disabled>Reconcile</button>
+    </div>
+  </header>
+
+  <div id="error-banner" class="error-banner hidden"></div>
+
+  <div id="dropzone" class="dropzone">
+    <p>Drag your <strong>receipts, bank CSV, and UPI screenshots</strong> here — or click “Upload pile”.</p>
+    <p class="hint">No API key? Runs in deterministic mock mode. Try the files in <code>sample_data/</code>.</p>
+    <ul id="file-list" class="file-list"></ul>
+  </div>
+
+  <main class="grid">
+    <!-- Panel 1: parallel agent grid -->
+    <section class="panel">
+      <h2>🤖 Extraction agents <span id="agent-count" class="count">0</span></h2>
+      <p class="panel-sub">Each document gets its own worker, run in parallel.</p>
+      <div id="agent-grid" class="agent-grid"></div>
+    </section>
+
+    <!-- Panel 2: reconciliation canvas -->
+    <section class="panel">
+      <h2>🔗 Reconciliation canvas</h2>
+      <p class="panel-sub">Cross-source links, collapsed duplicates, and flagged conflicts.</p>
+      <div id="drift-banner" class="drift-banner hidden"></div>
+      <div class="ledger-cols">
+        <div>
+          <h3 class="col-head posted">Posted ledger</h3>
+          <div id="posted-list" class="card-list"></div>
+        </div>
+        <div>
+          <h3 class="col-head quarantine">Quarantine lane</h3>
+          <div id="quarantine-list" class="card-list"></div>
+        </div>
+      </div>
+      <h3 class="col-head links">Links</h3>
+      <div id="links-list" class="card-list"></div>
+    </section>
+
+    <!-- Panel 3: AgentOps -->
+    <section class="panel">
+      <h2>📊 AgentOps</h2>
+      <p class="panel-sub">Every reasoning step traced, scored, timed, costed.</p>
+      <div class="metrics">
+        <div class="metric"><span id="m-spans">0</span><label>spans</label></div>
+        <div class="metric"><span id="m-latency">0<small>ms</small></span><label>total latency</label></div>
+        <div class="metric"><span id="m-cost">$0.00</span><label>est. cost</label></div>
+        <div class="metric"><span id="m-faith">—</span><label>avg faithfulness</label></div>
+      </div>
+      <div id="trace-log" class="trace-log"></div>
+    </section>
+  </main>
+
+  <footer id="summary" class="summary hidden"></footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>

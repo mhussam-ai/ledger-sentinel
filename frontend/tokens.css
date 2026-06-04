@@ -1,0 +1,109 @@
+/* Shared design tokens — one source of truth for the landing page and the
+   dashboard, so the whole product reads as one thing. No build step: this is
+   linked directly by both index.html and app.html (before their page CSS). */
+
+:root {
+  /* ── Surfaces ───────────────────────────────────────────────────────── */
+  --bg: #08090c;
+  --bg-2: #0d0f14;
+  --panel: #11141b;
+  --panel-2: #1a2030;
+  --border: #222836;
+  --border-soft: #1a1f2c;
+
+  /* ── Text ───────────────────────────────────────────────────────────── */
+  --text: #e8edf6;
+  --muted: #8a93a6;
+  --faint: #5b6577;
+
+  /* ── Brand ──────────────────────────────────────────────────────────── */
+  --green: #4ade80;            /* headlines, PASS, posted */
+  --green-soft: rgba(74, 222, 128, 0.13);
+  --amber: #ffb454;            /* quarantine / drift */
+  --amber-soft: rgba(255, 180, 84, 0.13);
+  --red: #ff4438;              /* CTAs, anomaly */
+  --red-soft: rgba(255, 68, 56, 0.12);
+  --accent: #5b8cff;           /* links, duplicates */
+  --blue: #5b8cff;
+
+  /* ── Code syntax highlight ──────────────────────────────────────────── */
+  --code-kw: #c084fc;
+  --code-str: #f0a35e;
+  --code-num: #7dd3fc;
+  --code-fn: #5b8cff;
+  --code-comment: #64748b;
+  --code-punc: #8a93a6;
+  --code-green: #4ade80;
+  --code-pink: #f472b6;
+
+  /* ── Type ───────────────────────────────────────────────────────────── */
+  --font-display: "Space Grotesk", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+  --font-body: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+  /* ── Motion ─────────────────────────────────────────────────────────── */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Shared mac-style code/terminal window — used on both pages. */
+.codewin {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.8);
+}
+.codewin-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border);
+}
+.codewin-bar .dot { width: 11px; height: 11px; border-radius: 50%; }
+.codewin-bar .r { background: #ff5f57; }
+.codewin-bar .y { background: #febc2e; }
+.codewin-bar .g { background: #28c840; }
+.codewin-bar .name {
+  margin-left: 8px; font-family: var(--font-mono);
+  font-size: 12px; color: var(--muted);
+}
+.codewin pre {
+  margin: 0; padding: 16px 18px;
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.7;
+  white-space: pre-wrap; word-break: break-word; tab-size: 2;
+}
+
+/* Syntax tokens for typed/static code. */
+.tok-kw { color: var(--code-kw); }
+.tok-str { color: var(--code-str); }
+.tok-num { color: var(--code-num); }
+.tok-fn { color: var(--code-fn); }
+.tok-com { color: var(--code-comment); }
+.tok-punc { color: var(--code-punc); }
+.tok-green { color: var(--code-green); }
+.tok-pink { color: var(--code-pink); }
+.tok-dim { color: var(--muted); }
+
+/* Blinking caret appended while a block is typing. */
+.caret {
+  display: inline-block; width: 8px; height: 1.05em;
+  vertical-align: text-bottom; background: var(--green);
+  margin-left: 1px; animation: caretblink 1s steps(2, start) infinite;
+}
+@keyframes caretblink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .caret { animation: none; }
+}
