@@ -1,0 +1,280 @@
+// Ledger Sentinel — dependency-free dashboard.
+// Subscribes to the backend SSE stream and renders the live agent grid,
+// reconciliation canvas, and AgentOps panel. No framework, no build step.
+//
+// Reliability model: the run executes server-side the moment /reconcile returns,
+// independent of this client. SSE is the *fast path* (live streaming); if it is
+// blocked or drops, we transparently fall back to polling /runs/{id} so the
+// result always renders. Every failure surfaces a real status + message — never
+// a blanket "could not reach the API".
+
+const API =
+  location.protocol === "file:" || !location.hostname
+    ? "http://localhost:8000"
+    : `${location.protocol}//${location.hostname}:8000`;
+
+const $ = (id) => document.getElementById(id);
+let selectedFiles = [];
+let metrics = { spans: 0, latency: 0, cost: 0, faithSum: 0, faithN: 0 };
+
+// ── Health badge (with a couple of retries while the server boots) ───────────
+async function refreshHealth(attempt = 0) {
+  try {
+    const h = await (await fetch(`${API}/health`)).json();
+    const b = $("mode-badge");
+    b.textContent = h.mock_mode ? "MOCK MODE" : "LIVE · Claude";
+    b.className = "badge " + (h.mock_mode ? "badge-mock" : "badge-live");
+    b.title = `v${h.version || "?"} · ${API}`;
+  } catch {
+    const b = $("mode-badge");
+    b.textContent = "API offline";
+    b.className = "badge badge-error";
+    b.title = `Could not reach ${API}/health`;
+    if (attempt < 3) setTimeout(() => refreshHealth(attempt + 1), 1500);
+  }
+}
+refreshHealth();
+
+// ── Error banner ────────────────────────────────────────────────────────
+function showError(msg) {
+  const b = $("error-banner");
+  b.textContent = msg;
+  b.classList.remove("hidden");
+}
+function clearError() {
+  $("error-banner").classList.add("hidden");
+}
+
+// ── File selection (click + drag/drop) ──────────────────────────────────
+const dz = $("dropzone");
+$("file-input").addEventListener("change", (e) => setFiles([...e.target.files]));
+["dragenter", "dragover"].forEach((ev) =>
+  dz.addEventListener(ev, (e) => {
+    e.preventDefault();
+    dz.classList.add("drag");
+  })
+);
+["dragleave", "drop"].forEach((ev) =>
+  dz.addEventListener(ev, (e) => {
+    e.preventDefault();
+    dz.classList.remove("drag");
+  })
+);
+dz.addEventListener("drop", (e) => setFiles([...e.dataTransfer.files]));
+
+function setFiles(files) {
+  selectedFiles = files;
+  $("file-list").innerHTML = files.map((f) => `<li>${f.name}</li>`).join("");
+  $("run-btn").disabled = files.length === 0;
+}
+
+// ── Run ───────────────────────────────────────────────────────────
+$("run-btn").addEventListener("click", startRun);
+
+async function startRun() {
+  resetPanels();
+  clearError();
+  $("run-btn").disabled = true;
+
+  const form = new FormData();
+  selectedFiles.forEach((f) => form.append("files", f));
+
+  // 1) Kick off the run. Distinguish network failure from a bad response.
+  let runId;
+  try {
+    const res = await fetch(`${API}/reconcile`, { method: "POST", body: form });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`POST /reconcile → HTTP ${res.status}. ${body.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    runId = data.run_id;
+    if (!runId) throw new Error("Server did not return a run_id.");
+  } catch (err) {
+    const reachable = err instanceof Error && !/Failed to fetch|NetworkError|TypeError/.test(err.message);
+    showError(
+      reachable
+        ? `Run could not start: ${err.message}`
+        : `Could not reach the API at ${API}. Is the backend running? (uvicorn app.main:app --port 8000)`
+    );
+    $("run-btn").disabled = false;
+    return;
+  }
+
+  // 2) Stream live via SSE; fall back to polling if SSE can't establish.
+  streamRun(runId);
+}
+
+function streamRun(runId) {
+  let settled = false; // run.completed / run.failed seen
+  let opened = false; // SSE connection ever opened
+
+  const es = new EventSource(`${API}/events/${runId}`);
+  const on = (type, fn) => es.addEventListener(type, (e) => fn(JSON.parse(e.data)));
+
+  es.onopen = () => {
+    opened = true;
+  };
+
+  on("run.started", () => {});
+  on("agent.cell.start", (p) => upsertCell(p.doc, "running"));
+  on("agent.cell.done", (p) => upsertCell(p.doc, "done", p));
+  on("trace", addTrace);
+  on("drift", showDrift);
+  on("txn.posted", (p) => addCard("posted-list", "posted", p.merchant, `₹${p.amount}`, "Posted to ledger"));
+  on("txn.quarantined", (p) => addCard("quarantine-list", "quarantine", p.merchant, "⚠", p.reason));
+  on("canvas.duplicate", (p) => addCard("links-list", "duplicate", "DUPLICATE", `${(p.score * 100) | 0}%`, p.detail));
+  on("canvas.anomaly", (p) => addCard("links-list", "anomaly", "ANOMALY", `${(p.score * 100) | 0}%`, p.detail, true));
+  on("run.completed", (p) => {
+    settled = true;
+    showSummary(p);
+    es.close();
+    $("run-btn").disabled = false;
+  });
+  on("run.failed", (p) => {
+    settled = true;
+    es.close();
+    showError(`The run failed server-side: ${p.error || "unknown error"}`);
+    $("run-btn").disabled = false;
+  });
+
+  // EventSource auto-reconnects on transient errors. If it errors *before ever
+  // opening* (SSE blocked by a proxy, etc.), stop retrying and poll the result.
+  es.onerror = () => {
+    if (settled) {
+      es.close();
+      return;
+    }
+    if (!opened) {
+      es.close();
+      pollForResult(runId);
+    }
+    // else: connection dropped mid-run; the browser will reconnect and the
+    // replay buffer re-sends history, so the UI heals itself.
+  };
+}
+
+// ── Polling fallback: render the final RunResult without SSE ─────────────────
+async function pollForResult(runId, attempt = 0) {
+  if (attempt === 0) showError("Live stream unavailable — falling back to polling…");
+  try {
+    const res = await fetch(`${API}/runs/${runId}`);
+    if (res.status === 202) {
+      return setTimeout(() => pollForResult(runId, attempt + 1), 800);
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    clearError();
+    renderResult(await res.json());
+    $("run-btn").disabled = false;
+  } catch (err) {
+    if (attempt < 40) return setTimeout(() => pollForResult(runId, attempt + 1), 800);
+    showError(`Gave up polling for the result: ${err.message}`);
+    $("run-btn").disabled = false;
+  }
+}
+
+function renderResult(r) {
+  resetPanels();
+  (r.links || []).forEach((l) => {
+    if (l.kind === "duplicate")
+      addCard("links-list", "duplicate", "DUPLICATE", `${(l.score * 100) | 0}%`, l.detail);
+    if (l.kind === "anomaly")
+      addCard("links-list", "anomaly", "ANOMALY", `${(l.score * 100) | 0}%`, l.detail, true);
+  });
+  (r.posted || []).forEach((t) =>
+    addCard("posted-list", "posted", t.merchant, `₹${t.amount}`, "Posted to ledger")
+  );
+  (r.quarantined || []).forEach((t) =>
+    addCard("quarantine-list", "quarantine", t.merchant, "⚠", t.quarantine_reason || "Quarantined")
+  );
+  showSummary({
+    total_posted_amount: r.total_posted_amount,
+    posted: (r.posted || []).length,
+    quarantined: (r.quarantined || []).length,
+    links: (r.links || []).length,
+    documents: r.documents,
+  });
+}
+
+// ── Renderers ──────────────────────────────────────────────────────
+function upsertCell(doc, state, p = {}) {
+  let cell = document.querySelector(`[data-doc="${cssEscape(doc)}"]`);
+  if (!cell) {
+    cell = document.createElement("div");
+    cell.className = "agent-cell";
+    cell.dataset.doc = doc;
+    cell.innerHTML = `<span class="dot"></span><div class="doc">${doc}</div><div class="meta"></div>`;
+    $("agent-grid").appendChild(cell);
+    $("agent-count").textContent = $("agent-grid").children.length;
+  }
+  cell.querySelector(".dot").className = "dot " + state;
+  if (state === "done") {
+    cell.classList.add("done");
+    cell.querySelector(".meta").innerHTML =
+      `<span>${p.worker || ""}</span><span>${p.latency_ms ?? 0}ms</span>` +
+      `<span>${p.count ?? 1} txn</span><span>faith ${(p.faithfulness ?? 1).toFixed(2)}</span>`;
+  }
+}
+
+function addCard(listId, kind, title, right, why, flash = false) {
+  const el = document.createElement("div");
+  el.className = `card ${kind}${flash ? " flash" : ""}`;
+  el.innerHTML =
+    `<div class="row"><span class="merchant">${title}</span><span class="amount">${right}</span></div>` +
+    `<div class="why">${why}</div>`;
+  $(listId).appendChild(el);
+}
+
+function addTrace(t) {
+  metrics.spans += 1;
+  metrics.latency += t.latency_ms || 0;
+  metrics.cost += t.usd_cost || 0;
+  if (typeof t.faithfulness === "number") {
+    metrics.faithSum += t.faithfulness;
+    metrics.faithN += 1;
+  }
+  $("m-spans").textContent = metrics.spans;
+  $("m-latency").innerHTML = `${metrics.latency}<small>ms</small>`;
+  $("m-cost").textContent = `$${metrics.cost.toFixed(4)}`;
+  $("m-faith").textContent = metrics.faithN ? (metrics.faithSum / metrics.faithN).toFixed(2) : "—";
+
+  const el = document.createElement("div");
+  el.className = "trace";
+  el.innerHTML =
+    `<span class="span">${t.span}</span> ` +
+    `<span class="kv">· ${t.model} · ${t.latency_ms}ms · ` +
+    `${t.tokens_in + t.tokens_out} tok · $${(t.usd_cost || 0).toFixed(4)} · faith ${(t.faithfulness ?? 1).toFixed(2)}</span>`;
+  const log = $("trace-log");
+  log.insertBefore(el, log.firstChild);
+}
+
+function showDrift(p) {
+  const b = $("drift-banner");
+  b.classList.remove("hidden");
+  b.innerHTML =
+    `⚡ <b>Schema drift detected</b> in ${p.doc} — headers ${JSON.stringify(p.headers)}. ` +
+    `Remap confidence ${(p.confidence * 100) | 0}% → <b>${p.action}</b>.`;
+}
+
+function showSummary(p) {
+  const s = $("summary");
+  s.classList.remove("hidden");
+  s.innerHTML =
+    `<div><b class="ok">₹${p.total_posted_amount}</b><div>posted total</div></div>` +
+    `<div><b>${p.posted}</b> posted · <b class="warn">${p.quarantined}</b> quarantined · <b>${p.links}</b> links</div>` +
+    `<div>${p.documents} documents reconciled</div>`;
+}
+
+function resetPanels() {
+  ["agent-grid", "posted-list", "quarantine-list", "links-list", "trace-log"].forEach(
+    (id) => ($(id).innerHTML = "")
+  );
+  $("agent-count").textContent = "0";
+  $("drift-banner").classList.add("hidden");
+  $("summary").classList.add("hidden");
+  metrics = { spans: 0, latency: 0, cost: 0, faithSum: 0, faithN: 0 };
+}
+
+function cssEscape(s) {
+  return s.replace(/"/g, '\\"');
+}
