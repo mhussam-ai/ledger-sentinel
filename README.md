@@ -35,6 +35,12 @@ _The LLM proposes; deterministic code disposes._
 
 [Architecture](./ARCHITECTURE.md) · [API reference](./API.md) · [Quickstart](#-quickstart) · [How it works](#-how-it-works) · [Deploy](./DEPLOY.md) · [Demo script](./DEMO.md) · [Contributing](./CONTRIBUTING.md)
 
+<br/>
+
+<img src="./Dashboard.png" alt="Ledger Sentinel dashboard mid-run: six documents extracted in parallel, a reconciliation canvas with cross-source duplicate links and a flagged BREW & CO amount-conflict anomaly, and a live AgentOps panel showing per-step latency, tokens, and cost." width="100%" />
+
+<sub>A live 6-document run — parallel extraction · schema-drift self-heal · cross-source duplicates collapsed · the <b>BREW &amp; CO ₹450-vs-₹540 conflict quarantined</b> · per-step AgentOps cost &amp; faithfulness.</sub>
+
 </div>
 
 > **▶ Live demo:** the app boots in deterministic **mock mode** — no API key, no

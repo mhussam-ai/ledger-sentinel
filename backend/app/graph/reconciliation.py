@@ -32,7 +32,8 @@ async def node_verify(state: GraphState) -> GraphState:
             quarantined.append(txn)
             await bus.publish(
                 run_id, "txn.quarantined",
-                {"id": txn.id, "merchant": txn.merchant, "reason": txn.quarantine_reason},
+                {"id": txn.id, "merchant": txn.merchant, "amount": str(txn.amount),
+                 "reason": txn.quarantine_reason},
             )
         else:
             verified.append(txn)
@@ -67,7 +68,8 @@ async def node_reconcile(state: GraphState) -> GraphState:
             txn.quarantine_reason = "Cross-source amount conflict — needs human review."
             state["quarantined"].append(txn)
             await bus.publish(run_id, "txn.quarantined",
-                              {"id": txn.id, "merchant": txn.merchant, "reason": txn.quarantine_reason})
+                              {"id": txn.id, "merchant": txn.merchant, "amount": str(txn.amount),
+                               "reason": txn.quarantine_reason})
 
     state["transactions"] = [
         t for t in verified if t.id not in anomaly_ids and t.id not in duplicate_drop_ids

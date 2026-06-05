@@ -158,7 +158,7 @@ function streamRun(runId) {
   on("trace", addTrace);
   on("drift", showDrift);
   on("txn.posted", (p) => addCard("posted-list", "posted", p.merchant, `₹${p.amount}`, "Posted to ledger"));
-  on("txn.quarantined", (p) => addCard("quarantine-list", "quarantine", p.merchant, "⚠", p.reason));
+  on("txn.quarantined", (p) => addCard("quarantine-list", "quarantine", p.merchant, `⚠ ₹${p.amount}`, p.reason));
   on("canvas.duplicate", (p) => addCard("links-list", "duplicate", "DUPLICATE", `${(p.score * 100) | 0}%`, p.detail));
   on("canvas.anomaly", (p) => addCard("links-list", "anomaly", "ANOMALY", `${(p.score * 100) | 0}%`, p.detail, true));
   on("run.completed", (p) => {
@@ -221,7 +221,7 @@ function renderResult(r) {
     addCard("posted-list", "posted", t.merchant, `₹${t.amount}`, "Posted to ledger")
   );
   (r.quarantined || []).forEach((t) =>
-    addCard("quarantine-list", "quarantine", t.merchant, "⚠", t.quarantine_reason || "Quarantined")
+    addCard("quarantine-list", "quarantine", t.merchant, `⚠ ₹${t.amount}`, t.quarantine_reason || "Quarantined")
   );
   showSummary({
     total_posted_amount: r.total_posted_amount,
