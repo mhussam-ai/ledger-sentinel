@@ -1,0 +1,14 @@
+# Keep the Docker build context (and the Hugging Face Space image) lean.
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+.git
+.gitignore
+backend/tests
+backend/evals
+backend/data
+*.md
+docker-compose.yml
+frontend/Dockerfile
+backend/Dockerfile

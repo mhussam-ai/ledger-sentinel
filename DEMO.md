@@ -9,34 +9,33 @@ the "wow" beats land in a fixed order and the system **cannot fail on camera**
 ## 0. Pre-flight (once)
 
 ```bash
-cd ledger-sentinel
+cd ledger-sentinel/backend
 
-# Terminal A — backend
-cd backend
+# One process serves BOTH the landing page and the dashboard (single origin).
 python -m venv .venv && .venv\Scripts\activate     # (Windows) or: source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --port 8000
-
-# Terminal B — the static frontend (landing + dashboard)
-cd frontend
-python -m http.server 5173
 ```
 
-Open **http://localhost:5173** — the **landing page** loads first (use it for the
+Open **http://localhost:8000** — the **landing page** loads first (use it for the
 Act-1 problem framing). Click **Launch the Dashboard** (or go to
-**/app.html**); the badge top-right should read **MOCK MODE** (or **LIVE · Claude**
-if you set `ANTHROPIC_API_KEY` in `.env`).
+**/app.html**); the badge top-right should read **MOCK MODE** (or **LIVE · Claude /
+Gemini / GPT** once you configure a provider in the dashboard ⚙️).
 
 > Tip: do the live recording in MOCK MODE. It is instant, free, and identical
-> every take. Mention on camera that flipping one env var swaps in real Claude
-> vision — the architecture is unchanged. That *is* the point.
+> every take. Mention on camera that selecting a provider, pasting a key, and
+> picking a model **right in the dashboard ⚙️** swaps in real Claude / Gemini /
+> GPT vision — the pipeline is unchanged. That *is* the point.
+>
+> Demoing from the **live Hugging Face Space**? Open the `…hf.space` URL once a
+> minute before recording so the free instance is warm (see DEPLOY.md).
 
 **Dry-run the pipeline once** (no UI) to confirm everything is wired:
 
 ```bash
 cd backend && python -m scripts.run_local          # 3 posted ₹1720, 3 quarantined, 1 anomaly
 python -m scripts.run_local --drift                # + 2 self-healed drifted rows
-pytest -q                                          # 16 passed
+pytest -q                                          # 45 passed
 python -m evals.run                                # gated eval scorecard → PASS
 ```
 

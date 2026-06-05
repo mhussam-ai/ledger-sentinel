@@ -8,10 +8,15 @@
 // result always renders. Every failure surfaces a real status + message — never
 // a blanket "could not reach the API".
 
+// Single-origin by design: the API and this dashboard are served by the *same*
+// FastAPI process (see the backend's StaticFiles mount), so every call is a
+// relative same-origin path — no CORS, no port juggling, one URL to share. The
+// only exception is opening this file straight from disk (file://), where we
+// fall back to a local dev server on :8000.
 const API =
   location.protocol === "file:" || !location.hostname
     ? "http://localhost:8000"
-    : `${location.protocol}//${location.hostname}:8000`;
+    : "";
 
 const $ = (id) => document.getElementById(id);
 let selectedFiles = [];

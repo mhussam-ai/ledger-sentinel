@@ -23,13 +23,16 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from collections import OrderedDict
+from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -356,3 +359,22 @@ async def get_run(run_id: str) -> RunResult:
             raise HTTPException(500, status.get("error", "Run failed."))
         raise HTTPException(404, "Run not found.")
     return result
+
+
+# ── Static dashboard (single-origin deploy) ───────────────────────────────────
+# Serve the vanilla-JS dashboard from the *same* process as the API. Mounted
+# last, so every API route above is matched first and this only catches the
+# remaining paths ("/", "/app.html", "/styles.css", ...). One origin means no
+# CORS and one public URL — exactly what a single free container (Hugging Face
+# Space / Render / Cloud Run) exposes. The directory is resolved from an env
+# override first (set in the container) and falls back to the repo's frontend/
+# folder for local `uvicorn`, so opening http://localhost:8000/ "just works".
+_frontend_dir = Path(
+    os.getenv("LEDGER_FRONTEND_DIR")
+    or Path(__file__).resolve().parents[2] / "frontend"
+)
+if _frontend_dir.is_dir():
+    app.mount("/", StaticFiles(directory=_frontend_dir, html=True), name="frontend")
+    log.info("serving dashboard from %s", _frontend_dir)
+else:  # API-only deployment (e.g. behind a separate static CDN) — that's fine.
+    log.info("no frontend dir at %s — running API-only", _frontend_dir)

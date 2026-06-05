@@ -1,3 +1,20 @@
+---
+title: Ledger Sentinel
+emoji: 🛡️
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+short_description: Autonomous financial-document reconciliation engine
+---
+
+<!-- The YAML block above configures the Hugging Face Space (Docker SDK). It is
+     ignored as content by GitHub (rendered as a small metadata table) and read
+     by Hugging Face to build/route the Space. Live demo boots to mock mode — no
+     API key needed. See DEPLOY.md to publish your own. -->
+
 <div align="center">
 
 # 🛡️ Ledger Sentinel
@@ -75,21 +92,22 @@ math, and trade-offs live in **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
 ```bash
 git clone https://github.com/mhussam-ai/ledger-sentinel
 cd ledger-sentinel
-cp .env.example .env        # ops-only config; no keys here. Boots in mock mode —
-                            # pick provider + key + model live in the dashboard ⚙️
 
-# One command, full stack:
-docker compose up
+# One command, full stack — builds the SAME single-origin image the live demo
+# runs (one FastAPI process serves the dashboard + the API). Boots to mock mode;
+# pick provider + key + model live in the dashboard ⚙️ — no env, no keys.
+docker compose up                              # → http://localhost:8000
 
-# …or run the two pieces directly:
-cd backend && pip install -r requirements.txt && uvicorn app.main:app --port 8000
-cd frontend && python -m http.server 5173      # fully static — no build step
+# …or run it directly with Python (no build step, no separate UI server):
+cd backend && pip install -r requirements.txt
+uvicorn app.main:app --port 8000
 ```
 
-- Landing page → http://localhost:5173  (the submission front door)
-- Dashboard → http://localhost:5173/app.html  (or click **Launch the Dashboard**)
+- Landing page → http://localhost:8000  (the submission front door)
+- Dashboard → http://localhost:8000/app.html  (or click **Launch the Dashboard**)
 - API + interactive docs → http://localhost:8000/docs
 - Sample pile to drag in → [`sample_data/`](./sample_data)
+- **Deploy your own free live demo → [DEPLOY.md](./DEPLOY.md)** (Hugging Face Space)
 
 ```bash
 # Prove correctness without a server — deterministic, no API key:
