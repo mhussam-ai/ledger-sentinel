@@ -18,13 +18,16 @@ let selectedFiles = [];
 let metrics = { spans: 0, latency: 0, cost: 0, faithSum: 0, faithN: 0 };
 
 // ── Health badge (with a couple of retries while the server boots) ───────────
+const PROVIDER_SHORT = { anthropic: "Claude", google: "Gemini", openai: "GPT", mock: "Mock" };
+
 async function refreshHealth(attempt = 0) {
   try {
     const h = await (await fetch(`${API}/health`)).json();
     const b = $("mode-badge");
-    b.textContent = h.mock_mode ? "MOCK MODE" : "LIVE · Claude";
+    const short = PROVIDER_SHORT[h.provider] || h.provider || "";
+    b.textContent = h.mock_mode ? "MOCK MODE" : `LIVE · ${short}`;
     b.className = "badge " + (h.mock_mode ? "badge-mock" : "badge-live");
-    b.title = `v${h.version || "?"} · ${API}`;
+    b.title = `${h.provider_label || "provider"} · ${h.model || ""} · v${h.version || "?"} — click to configure`;
   } catch {
     const b = $("mode-badge");
     b.textContent = "API offline";
@@ -35,7 +38,7 @@ async function refreshHealth(attempt = 0) {
 }
 refreshHealth();
 
-// ── Error banner ────────────────────────────────────────────────────────
+// ── Error banner ─────────────────────────────────────────────────
 function showError(msg) {
   const b = $("error-banner");
   b.textContent = msg;
@@ -45,7 +48,7 @@ function clearError() {
   $("error-banner").classList.add("hidden");
 }
 
-// ── File selection (click + drag/drop) ──────────────────────────────────
+// ── File selection (click + drag/drop) ─────────────────────────────
 const dz = $("dropzone");
 $("file-input").addEventListener("change", (e) => setFiles([...e.target.files]));
 ["dragenter", "dragover"].forEach((ev) =>
@@ -68,7 +71,7 @@ function setFiles(files) {
   $("run-btn").disabled = files.length === 0;
 }
 
-// ── Run ───────────────────────────────────────────────────────────
+// ── Run ────────────────────────────────────────────────
 $("run-btn").addEventListener("click", startRun);
 
 async function startRun() {
@@ -196,7 +199,7 @@ function renderResult(r) {
   });
 }
 
-// ── Renderers ──────────────────────────────────────────────────────
+// ── Renderers ─────────────────────────────────────────────
 function upsertCell(doc, state, p = {}) {
   let cell = document.querySelector(`[data-doc="${cssEscape(doc)}"]`);
   if (!cell) {
@@ -278,3 +281,213 @@ function resetPanels() {
 function cssEscape(s) {
   return s.replace(/"/g, '\\"');
 }
+
+// ── Provider control plane (Settings modal) ───────────────────────────────
+// Pick provider · paste key · choose models, all at runtime. The agent switches
+// live — this is the "plug-and-play" surface over the backend /config endpoints.
+let providersCatalog = []; // [{id,label,models:[...],requires_key,key_configured,docs_url,...}]
+
+const overlay = $("settings-overlay");
+const openSettings = () => {
+  overlay.classList.remove("hidden");
+  loadConfig();
+};
+const closeSettings = () => {
+  overlay.classList.add("hidden");
+  cfgMsg("", null);
+  $("cfg-key").value = "";
+};
+
+$("settings-btn").addEventListener("click", openSettings);
+$("mode-badge").addEventListener("click", openSettings);
+$("settings-close").addEventListener("click", closeSettings);
+$("cfg-cancel").addEventListener("click", closeSettings);
+overlay.addEventListener("click", (e) => {
+  if (e.target === overlay) closeSettings();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !overlay.classList.contains("hidden")) closeSettings();
+});
+
+function cfgMsg(text, ok) {
+  const m = $("cfg-msg");
+  if (!text) {
+    m.classList.add("hidden");
+    return;
+  }
+  m.classList.remove("hidden");
+  m.className = "cfg-msg " + (ok === true ? "ok" : ok === false ? "err" : "info");
+  m.textContent = text;
+}
+
+async function loadConfig() {
+  cfgMsg("Loading…", null);
+  try {
+    const [prov, cfg] = await Promise.all([
+      (await fetch(`${API}/providers`)).json(),
+      (await fetch(`${API}/config`)).json(),
+    ]);
+    providersCatalog = prov.providers;
+
+    const sel = $("cfg-provider");
+    sel.innerHTML = providersCatalog
+      .map((p) => `<option value="${p.id}">${p.label}</option>`)
+      .join("");
+    sel.value = cfg.provider;
+    sel.onchange = () => paintProvider(sel.value, cfg);
+    paintProvider(cfg.provider, cfg);
+    cfgMsg("", null);
+  } catch (err) {
+    cfgMsg(`Couldn't load configuration: ${err.message}. Is the backend running?`, false);
+  }
+}
+
+// Fill the two model <select>s from a [{id,label}] list, keeping a selection.
+function populateModels(list, selFast, selDeep) {
+  const opts = (list || [])
+    .map((m) => `<option value="${m.id}">${m.label || m.id}</option>`)
+    .join("");
+  const fast = $("cfg-fast"), deep = $("cfg-deep");
+  fast.innerHTML = opts;
+  deep.innerHTML = opts;
+  const ids = (list || []).map((m) => m.id);
+  fast.value = ids.includes(selFast) ? selFast : ids[0] || "";
+  deep.value = ids.includes(selDeep) ? selDeep : fast.value;
+  fast.disabled = deep.disabled = ids.length === 0;
+}
+
+// Render key-status, docs link, and seed the model dropdowns for a provider.
+function paintProvider(pid, cfg) {
+  const p = providersCatalog.find((x) => x.id === pid) || {};
+  const needsKey = p.requires_key;
+  const configured = p.key_configured;
+  const saved = (cfg && cfg.models && cfg.models[pid]) || {};
+  const selFast = saved.fast || p.selected_fast || p.default_fast || "";
+  const selDeep = saved.deep || p.selected_deep || p.default_deep || "";
+
+  // Seed from the catalog so the dropdown is never empty; the live list (fetched
+  // with the key) is authoritative and replaces this.
+  populateModels(p.models || [], selFast, selDeep);
+
+  $("cfg-key").disabled = !needsKey;
+  $("cfg-fetch").disabled = !needsKey;
+  $("cfg-key").placeholder = !needsKey
+    ? "no key needed — deterministic mock mode"
+    : configured
+    ? "key configured ✓ — paste to replace"
+    : "paste API key…";
+
+  const status = $("cfg-key-status");
+  status.textContent = !needsKey ? "" : configured ? "configured ✓" : "not set";
+  status.className = "key-status " + (!needsKey ? "" : configured ? "ok" : "warn");
+
+  const docs = $("cfg-key-docs");
+  if (needsKey && p.docs_url) {
+    docs.href = p.docs_url;
+    docs.style.display = "";
+  } else {
+    docs.style.display = "none";
+  }
+
+  // If a key is already on file (or none is needed), fetch the live models now.
+  if (!needsKey || configured) fetchModels({ silent: true });
+}
+
+// Fetch the live model list the key can actually use → repopulate the dropdowns.
+async function fetchModels({ silent = false } = {}) {
+  const provider = $("cfg-provider").value;
+  const p = providersCatalog.find((x) => x.id === provider) || {};
+  if (!p.requires_key) {
+    populateModels([{ id: "mock", label: "Deterministic mock" }], "mock", "mock");
+    return;
+  }
+  const typedKey = $("cfg-key").value.trim();
+  if (!typedKey && !p.key_configured) {
+    if (!silent) cfgMsg("Enter an API key, then fetch its models.", false);
+    return;
+  }
+  if (!silent) cfgMsg("Fetching available models…", null);
+  try {
+    const res = await fetch(`${API}/providers/${provider}/models`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(typedKey ? { api_key: typedKey } : {}),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    if (!data.ok) throw new Error(data.error || "could not list models");
+    if (!data.models.length) throw new Error("this key returned no usable models");
+    populateModels(data.models, $("cfg-fast").value, $("cfg-deep").value);
+    if (!silent) cfgMsg(`Loaded ${data.models.length} models for this key.`, true);
+  } catch (err) {
+    if (!silent) cfgMsg(`Couldn't fetch models: ${err.message}`, false);
+  }
+}
+
+function gatherConfig() {
+  const provider = $("cfg-provider").value;
+  const body = {
+    provider,
+    fast_model: $("cfg-fast").value,
+    deep_model: $("cfg-deep").value || $("cfg-fast").value,
+  };
+  const key = $("cfg-key").value.trim();
+  if (key) body.api_key = key; // blank = leave unchanged (never wipe)
+  return body;
+}
+
+$("cfg-fetch").addEventListener("click", () => fetchModels());
+
+$("cfg-test").addEventListener("click", async () => {
+  const provider = $("cfg-provider").value;
+  cfgMsg("Testing connection…", null);
+  try {
+    const res = await fetch(`${API}/config/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        provider,
+        api_key: $("cfg-key").value.trim() || undefined,
+        model: $("cfg-fast").value.trim() || undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    if (data.ok) cfgMsg(`✓ ${data.provider} reachable · ${data.model} · ${data.latency_ms}ms`, true);
+    else cfgMsg(`✗ ${data.error}`, false);
+  } catch (err) {
+    cfgMsg(`✗ ${err.message}`, false);
+  }
+});
+
+$("cfg-save").addEventListener("click", async () => {
+  const provider = $("cfg-provider").value;
+  const p = providersCatalog.find((x) => x.id === provider) || {};
+  const hasKey = $("cfg-key").value.trim() || p.key_configured;
+  // Guide the user through the flow rather than silently saving a half-config.
+  if (p.requires_key && !hasKey) return cfgMsg("Add an API key for this provider first.", false);
+  if (p.requires_key && !$("cfg-fast").value)
+    return cfgMsg("Fetch models and select one before saving.", false);
+
+  cfgMsg("Saving…", null);
+  try {
+    const res = await fetch(`${API}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(gatherConfig()),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+    cfgMsg(
+      data.mock_mode
+        ? "Saved. Running in deterministic mock mode (no live key for this provider)."
+        : `Saved. Live on ${data.provider_label} · ${data.fast_model}.`,
+      true
+    );
+    $("cfg-key").value = "";
+    refreshHealth();
+    setTimeout(closeSettings, 1100);
+  } catch (err) {
+    cfgMsg(`Couldn't save: ${err.message}`, false);
+  }
+});

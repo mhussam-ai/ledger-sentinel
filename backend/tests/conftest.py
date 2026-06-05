@@ -5,7 +5,19 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
+from app.runtime import reset_runtime
 from app.schemas import FieldConfidence, Transaction, TxnState
+
+
+@pytest.fixture(autouse=True)
+def _isolate_runtime():
+    """Each test starts from a freshly bootstrapped control plane, so a config
+    change in one test can never leak provider/threshold state into another."""
+    reset_runtime()
+    yield
+    reset_runtime()
 
 
 def make_txn(

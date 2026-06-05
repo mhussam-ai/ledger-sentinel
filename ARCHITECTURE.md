@@ -54,7 +54,7 @@ flowchart TB
     end
 
     subgraph Workers["🤖 Extraction worker pool (parallel fan-out)"]
-        ROUTER -->|image / pdf| VIS[Vision worker · Claude]
+        ROUTER -->|image / pdf| VIS[Vision worker · provider]
         ROUTER -->|csv| CSVW[CSV worker · Pandera contract]
         VIS --> VERIFY[Self-verify guardrail]
         CSVW --> VERIFY
@@ -120,7 +120,7 @@ sequenceDiagram
     participant API as FastAPI
     participant G as LangGraph
     participant W as Worker pool
-    participant LLM as Claude
+    participant LLM as Provider (Claude/Gemini/GPT)
     participant T as Tracer
 
     UI->>API: POST /reconcile (N files)
@@ -237,15 +237,85 @@ under cost/model-routing, not architecture.
    *looks* confident is worse than a slow one. This is a latency-for-trust trade.
 
 3. **Two-tier model routing (latency × cost × accuracy).** Clean documents go to
-   a fast model (`LEDGER_MODEL_FAST`); only low-confidence/ambiguous ones escalate
-   to the deep model (`LEDGER_MODEL_DEEP`). ~80% of docs never need the expensive
-   path, so p50 latency and cost track the *fast* model while accuracy on the hard
-   20% tracks the *deep* one.
+   a fast model; only low-confidence/ambiguous ones escalate to the deep model.
+   ~80% of docs never need the expensive path, so p50 latency and cost track the
+   *fast* model while accuracy on the hard 20% tracks the *deep* one. Both models
+   are chosen per-provider from the dashboard (see §7.5).
 
 4. **SSE vs. WebSocket for live updates.** The dashboard only needs
    *server→client* streaming. SSE is one-directional, survives proxies, and
    auto-reconnects — strictly simpler than WebSocket for this access pattern, with
    no feature we'd miss.
+
+---
+
+## 7.5 Pluggable model providers & the runtime control plane
+
+The two-tier routing above assumes a model — but *which vendor's* model should
+not be welded into the pipeline. A reconciliation engine is a long-lived asset; the
+model market underneath it changes monthly. So provider choice is a **runtime
+configuration**, not a compile-time dependency.
+
+```mermaid
+flowchart LR
+    subgraph CP["🛠️ Control plane (runtime.py)"]
+        DASH[Dashboard ⚙️] -->|1 select provider + key| RT[(RuntimeConfig<br/>provider · key · model)]
+        DASH -->|2 fetch live models| IFACE
+        DASH -->|3 select model · save| RT
+    end
+    subgraph DP["Data plane (the pipeline)"]
+        WORK[Vision worker] --> IFACE{{LLMProvider contract}}
+    end
+    RT -->|selects| IFACE
+    IFACE --> A[Anthropic · Claude]
+    IFACE --> G[Google · Gemini]
+    IFACE --> O[OpenAI · GPT]
+    IFACE --> M[Mock · deterministic]
+```
+
+**The contract.** Every vendor implements one primitive — `complete(prompt) →
+text + token usage`. The high-value logic that must be *identical* across vendors —
+the two-read **self-consistency** guardrail (F1) and **retry/backoff** (F6) — lives
+once in the base class. Adding a vendor is one method, not a new pipeline. The
+extraction worker imports `LLMProvider`; it never imports an SDK, so a vendor's
+client library is a lazily-loaded, *optional* dependency.
+
+**Mock is a first-class provider, not a special case.** The deterministic parser
+*is* the mock provider, and also the universal degradation target: if any live
+provider call fails, the worker falls back to that same parse (F6). This is why
+the demo and the eval gates are deterministic regardless of which vendor is
+selected.
+
+**The dashboard is the only decision-maker.** There is deliberately no env-based
+provider/key/model selection. The system **always boots to mock** and stays there
+until an operator configures it through the UI — so an ambient `OPENAI_API_KEY` in
+the shell can never silently change what the agent does, and the default is always
+the safe, deterministic one. `config.Settings` carries *ops* config only (thresholds,
+concurrency, retries, the admin token); `runtime.RuntimeConfig` is the live model
+picture the dashboard mutates (`PUT /config`) with no restart.
+
+**Models are discovered, not typed.** Free-text model IDs are error-prone, so once a
+key is supplied the dashboard calls `POST /providers/{id}/models`, which asks the
+*vendor* what that key can actually use (`client.models.list()` for Anthropic/OpenAI,
+`aio.models.list()` for Gemini) and populates a dropdown. The static catalog is only
+a pre-key fallback and the source of cost pricing.
+
+Two more non-negotiables:
+
+- **Secrets are write-only.** `public_snapshot()` reports *whether* a key is
+  configured, never the key. A key submitted from the dashboard can never be read
+  back out — only replaced.
+- **Safe by default.** Selecting a provider with no key doesn't error; it
+  *collapses to mock* (`effective_provider`), so a misconfiguration degrades to the
+  deterministic demo instead of a 500. An optional `LEDGER_ADMIN_TOKEN` gates the
+  key-bearing config + model-fetch endpoints — a stand-in for the RBAC a production
+  control plane would enforce.
+
+**Scale note.** Today the control plane is process-local (ideal for one API task or
+the demo). For multiple replicas, back `RuntimeConfig` with a shared store (Redis /
+SSM Parameter Store) so every replica sees the same provider config — the call
+sites (`get_runtime()`) do not change. Cost attribution stays correct across vendors
+because pricing is one auditable catalog table keyed by model id.
 
 ---
 
@@ -261,8 +331,8 @@ failure we name the guardrail and where it lives in code.
 | F3 | **Cross-source amount conflict** (receipt ₹450 vs statement ₹540) | Match found but amounts disagree → `ANOMALY` → `QUARANTINE` with both values + evidence | `graph/reconciliation.py` |
 | F4 | **Hallucinated field** (invented merchant/date) | Output is schema-constrained; every claim must cite `evidence`; uncited claims stripped pre-`VERIFIED` | `schemas.py` + `verify.py` |
 | F5 | **Bank CSV schema drift** (renamed/reordered column) | Pandera contract validates headers/types; on drift, rows go to `QUARANTINE` and a remap is proposed, then **replayed** — no crash, no corruption | `extraction/csv_ingest.py` |
-| F6 | **Model API failure / rate limit** | Retry w/ exponential backoff + jitter (`LEDGER_MAX_RETRIES`); transient 429/5xx/timeout are retried, then the doc **degrades to the deterministic parser** — if that read is itself low-confidence, the verify gate quarantines it. The run always completes | `extraction/vision.py` |
-| F7 | **No API key at all** | Deterministic **mock mode** replays canned extractions so the system — and the live demo — never hard-fails | `config.py` |
+| F6 | **Model API failure / rate limit** (any provider) | Retry w/ exponential backoff + jitter (`LEDGER_MAX_RETRIES`); transient 429/5xx/timeout are retried, then the doc **degrades to the deterministic parser** — if that read is itself low-confidence, the verify gate quarantines it. The run always completes. The retry logic lives once in the provider base class, so it is identical for Anthropic/Google/OpenAI | `providers/base.py` |
+| F7 | **No / wrong API key, or unknown provider** | Selecting a provider with no key **collapses to deterministic mock mode** (`effective_provider`) rather than erroring; the system — and the live demo — never hard-fails. A bad key can be caught up-front with `POST /config/test` | `runtime.py` |
 | F8 | **Dashboard connects late, SSE drops, or is blocked by a proxy** | Run execution is **decoupled from streaming**: it launches on `POST /reconcile` and completes regardless of who's watching. The event bus keeps a **per-run replay buffer**, so a late/reconnecting subscriber receives full history then tails live; if SSE can't connect at all, the client **falls back to polling** `/runs/{id}`. A failed run emits `run.failed` rather than hanging | `events.py` + `main.py` + `frontend/app.js` |
 
 ### The validation state machine, precisely
@@ -328,6 +398,9 @@ build. Run it live with `python -m evals.run`.
 - **No silent egress:** the only external call is to the model provider, and only
   document *content* needed for extraction is sent; nothing is logged in cleartext
   to traces (trace payloads carry derived fields + crop refs, not raw images).
+- **Secrets are write-only:** provider API keys are supplied from the dashboard,
+  held only in the runtime control plane, and never serialized back out —
+  `public_snapshot()` reports *whether* a key is set, never its value (§7.5).
 - **Human-in-the-loop gate:** the `QUARANTINE → VERIFIED` transition requires an
   explicit human resolution — the system never auto-approves its own uncertainty.
 
@@ -338,12 +411,13 @@ build. Run it live with `python -m evals.run`.
 | Decision | Chosen | Rejected alternative | Why |
 |---|---|---|---|
 | Orchestration | LangGraph | hand-rolled `async` chain | checkpointing, replay, explicit guarded edges, audit trail |
-| Extraction | Claude vision, schema-constrained | standalone OCR (Tesseract/Paddle) | OCR returns text, not *structured + confidence-scored* fields; reconciliation needs the latter |
+| Extraction | LLM vision, schema-constrained | standalone OCR (Tesseract/Paddle) | OCR returns text, not *structured + confidence-scored* fields; reconciliation needs the latter |
 | CSV integrity | Pandera contract | trust-the-headers parsing | drift is the #1 real-world breakage; a contract turns a 3am crash into a quarantine |
 | Matching | RapidFuzz (deterministic) | LLM "are these the same?" | matching must be fast, cheap, explainable, and unit-testable — not a token spend |
 | Money type | `Decimal` | `float` | float arithmetic on currency is a correctness bug, not a style choice |
 | Live updates | SSE | WebSocket | one-directional stream; simpler, proxy-friendly, auto-reconnect |
 | Observability | Langfuse (optional) + in-proc tracer | print logging | evals + traces are the differentiating "AgentOps" signal; in-proc fallback keeps it dependency-light |
+| Model provider | uniform `LLMProvider` adapter + runtime control plane | one hard-wired vendor | swap Anthropic/Google/OpenAI/mock from the dashboard with no redeploy; the pipeline never imports an SDK, and per-vendor client libs stay optional |
 
 ---
 
