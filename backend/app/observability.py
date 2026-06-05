@@ -12,19 +12,15 @@ from __future__ import annotations
 
 from .config import get_settings
 from .events import bus
+from .providers.catalog import get_model_pricing
 from .schemas import Transaction
-
-# Approximate public pricing (USD per 1M tokens). Used for the live cost meter;
-# kept as a table so model routing decisions are auditable.
-_PRICING: dict[str, tuple[float, float]] = {
-    "claude-opus-4-8": (15.0, 75.0),
-    "claude-haiku-4-5-20251001": (1.0, 5.0),
-    "mock": (0.0, 0.0),
-}
 
 
 def estimate_cost(model: str, tokens_in: int, tokens_out: int) -> float:
-    price_in, price_out = _PRICING.get(model, (0.0, 0.0))
+    """Live USD cost estimate. Pricing is sourced from the provider catalog
+    (one auditable table spanning Anthropic, Google, and OpenAI); unknown / mock
+    / deterministic models price at zero so the meter never over-reports."""
+    price_in, price_out = get_model_pricing(model)
     return round((tokens_in * price_in + tokens_out * price_out) / 1_000_000, 6)
 
 
