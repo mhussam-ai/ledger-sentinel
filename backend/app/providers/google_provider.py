@@ -10,6 +10,24 @@ from __future__ import annotations
 
 from .base import LLMProvider, LLMResponse, is_transient_by_name
 
+# The dropdown should only offer models that can actually do the reconciliation
+# job — general **text/vision** generation. A Gemini key often unlocks many other
+# model families that *cannot* extract a receipt: image generation (Imagen /
+# "Nano Banana"), video (Veo), music (Lyria), speech (TTS), embeddings, and
+# specialized agents (Robotics, Computer Use, Deep Research, Antigravity). We drop
+# them by capability (must support `generateContent`) and by these id hints, so a
+# user can't accidentally pick a music model as their extractor.
+_GOOGLE_SKIP = (
+    "embedding", "aqa",
+    "imagen", "image", "banana",   # image generation (incl. Nano Banana)
+    "veo", "video",                # video generation
+    "lyria", "music",              # music generation
+    "tts", "audio",                # speech
+    "robotics", "computer-use",    # specialized agents
+    "research", "antigravity",     # research / agent models
+    "live",                        # bidirectional live streaming
+)
+
 
 class GoogleProvider(LLMProvider):
     id = "google"
@@ -61,7 +79,7 @@ class GoogleProvider(LLMProvider):
             if not name:
                 continue
             low = name.lower()
-            if any(x in low for x in ("embedding", "aqa", "imagen", "veo", "image-generation")):
+            if any(x in low for x in _GOOGLE_SKIP):
                 continue
             out.append((name, getattr(m, "display_name", None) or name))
             if len(out) >= 200:

@@ -252,14 +252,28 @@ async def test_google_list_models_filters_and_strips_prefix():
     class FakeModelsAPI:
         def list(self):
             return _aiter([
+                # General text/vision models — these CAN do the job (kept).
+                _Boxes(name="models/gemini-flash-latest", display_name="Gemini Flash Latest",
+                       supported_actions=["generateContent"]),
                 _Boxes(name="models/gemini-2.5-flash", display_name="Gemini 2.5 Flash",
                        supported_actions=["generateContent"]),
+                # Specialized families that CANNOT extract a receipt (all filtered).
                 _Boxes(name="models/text-embedding-004", display_name="Embeddings",
-                       supported_actions=["embedContent"]),  # filtered out
+                       supported_actions=["embedContent"]),
+                _Boxes(name="models/gemini-2.5-flash-image", display_name="Nano Banana",
+                       supported_actions=["generateContent"]),     # image generation
+                _Boxes(name="models/lyria-3-pro", display_name="Lyria 3 Pro",
+                       supported_actions=[]),                       # music (empty actions → by name)
+                _Boxes(name="models/gemini-robotics-er-1.5", display_name="Robotics-ER",
+                       supported_actions=["generateContent"]),      # robotics agent
+                _Boxes(name="models/gemini-2.5-flash-tts", display_name="Flash TTS",
+                       supported_actions=["generateContent"]),      # speech
             ])
 
     p = GoogleProvider(api_key="x")
     p._client = _Boxes(aio=_Boxes(models=FakeModelsAPI()))
-    got = await p.list_models()
-    assert ("gemini-2.5-flash", "Gemini 2.5 Flash") in got      # prefix stripped
-    assert all("embedding" not in mid for mid, _ in got)
+    ids = [mid for mid, _ in await p.list_models()]
+    assert "gemini-flash-latest" in ids and "gemini-2.5-flash" in ids   # prefix stripped, kept
+    for excluded in ("text-embedding-004", "gemini-2.5-flash-image",
+                     "lyria-3-pro", "gemini-robotics-er-1.5", "gemini-2.5-flash-tts"):
+        assert excluded not in ids
