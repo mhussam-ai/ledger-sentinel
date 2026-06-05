@@ -1,13 +1,13 @@
 # ── Core API ──────────────────────────────────────
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
-python-multipart==0.0.18
+python-multipart==0.0.27
 sse-starlette==2.1.3
 pydantic==2.10.4
 pydantic-settings==2.7.0
 
 # ── Agents / LLM ─────────────────────────
-langgraph==0.2.60
+langgraph==1.0.10rc1
 
 # Model providers are plug-and-play and imported lazily — the system runs
 # (mock mode, tests, and any one provider) even if the others aren't installed.
@@ -27,5 +27,5 @@ rapidfuzz==3.10.1
 langfuse==2.57.0
 
 # ── Tests ─────────────────────────────────
-pytest==8.3.4
+pytest==9.0.3
 pytest-asyncio==0.25.0
