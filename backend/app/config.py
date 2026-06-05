@@ -1,8 +1,12 @@
-"""Application settings.
+"""Application settings — *operational* configuration only.
 
-The single most important line here is `mock_mode`: if no ANTHROPIC_API_KEY is
-present the whole system runs deterministically off canned extractions, so the
-live demo can never hard-fail on stage (failure mode F7 in ARCHITECTURE.md).
+By design this file holds **no model decisions**. Which provider, which API key,
+and which model are chosen entirely from the dashboard at runtime (see
+`runtime.py`), never from the environment — the system always boots in
+deterministic mock mode and stays there until an operator configures a provider.
+What lives here is ops config that legitimately belongs to the deployment:
+guardrail thresholds, fan-out concurrency, retry policy, observability, and the
+optional admin token that guards the control plane.
 """
 from __future__ import annotations
 
@@ -16,13 +20,13 @@ class Settings(BaseSettings):
         env_file=(".env", "../.env"), env_prefix="", extra="ignore"
     )
 
-    anthropic_api_key: str = ""
+    # Optional admin token. If set, configuration writes (PUT /config,
+    # /config/test, model fetch) require the `X-Admin-Token` header — a
+    # lightweight stand-in for the RBAC a real control plane would enforce.
+    # Unset → open (zero-config local/demo).
+    ledger_admin_token: str = ""
 
-    # Two-tier model routing (latency × cost × accuracy, see ARCHITECTURE §7).
-    ledger_model_fast: str = "claude-haiku-4-5-20251001"
-    ledger_model_deep: str = "claude-opus-4-8"
-
-    # Guardrail thresholds.
+    # Guardrail thresholds (seed the runtime defaults; tunable from the dashboard).
     ledger_confidence_threshold: float = 0.80
     ledger_match_threshold: float = 0.82
 
@@ -31,7 +35,7 @@ class Settings(BaseSettings):
 
     # Transient-failure handling for live model calls (rate limits, 5xx, timeouts).
     # Retries with exponential backoff + jitter before degrading to the
-    # deterministic parser (ARCHITECTURE.md §8, F4).
+    # deterministic parser (ARCHITECTURE.md §8, F6).
     ledger_max_retries: int = 3
     ledger_retry_base_delay: float = 0.5
 
@@ -39,10 +43,6 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
-
-    @property
-    def mock_mode(self) -> bool:
-        return not bool(self.anthropic_api_key.strip())
 
     @property
     def langfuse_enabled(self) -> bool:

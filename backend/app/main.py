@@ -30,12 +30,16 @@ from collections import OrderedDict
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
 from .config import get_settings
 from .events import bus
 from .extraction import UploadedDoc, extract_document
 from .graph.reconciliation import run_reconciliation
+from .providers import build_provider
+from .providers.catalog import PROVIDER_INFO
+from .runtime import ConfigError, get_runtime, update_runtime
 from .schemas import RunResult
 
 logging.basicConfig(
@@ -93,13 +97,159 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 @app.get("/health")
 async def health() -> dict:
     s = get_settings()
+    rt = get_runtime()
     return {
         "status": "ok",
         "version": app.version,
-        "mock_mode": s.mock_mode,
+        "mock_mode": rt.mock_mode,
+        "provider": rt.effective_provider,
+        "provider_label": rt.provider_label,
+        "model": rt.active_fast_model,
         "langfuse": s.langfuse_enabled,
-        "max_concurrency": s.ledger_max_concurrency,
+        "max_concurrency": rt.max_concurrency,
     }
+
+
+# ── Control plane: provider / model / key configuration ────────────────────────
+def _require_admin(request: Request) -> None:
+    """Gate configuration writes on the admin token *if one is configured*.
+
+    Unset (the local/demo default) → open. This is a lightweight stand-in for the
+    RBAC a production control plane would enforce on a sensitive, key-bearing
+    endpoint; the check lives here so secrets are never writable anonymously when
+    an operator has opted into protecting them."""
+    token = get_settings().ledger_admin_token
+    if token and request.headers.get("x-admin-token") != token:
+        raise HTTPException(401, "A valid X-Admin-Token header is required to change configuration.")
+
+
+@app.get("/providers")
+async def list_providers() -> dict:
+    """Catalog for the dashboard: providers, their models, pricing, key status."""
+    rt = get_runtime()
+    return {
+        "selected": rt.provider,
+        "effective": rt.effective_provider,
+        "providers": [
+            {
+                "id": info.id,
+                "label": info.label,
+                "requires_key": info.requires_key,
+                "key_configured": rt.key_configured(info.id),
+                "default_fast": info.default_fast,
+                "default_deep": info.default_deep,
+                "selected_fast": rt.fast_models.get(info.id) or info.default_fast,
+                "selected_deep": rt.deep_models.get(info.id) or info.default_deep,
+                "docs_url": info.docs_url,
+                "models": [
+                    {"id": m.id, "label": m.label, "price_in": m.price_in, "price_out": m.price_out}
+                    for m in info.models
+                ],
+            }
+            for info in PROVIDER_INFO.values()
+        ],
+    }
+
+
+class ModelsRequest(BaseModel):
+    api_key: str | None = None
+
+
+@app.post("/providers/{provider}/models")
+async def fetch_models(provider: str, body: ModelsRequest, request: Request) -> dict:
+    """Fetch the live model list a key can actually use — this populates the
+    dashboard's model dropdown (no error-prone free text). Uses the supplied key
+    or the one already configured for the provider; never persists anything."""
+    _require_admin(request)
+    pid = provider.strip().lower()
+    info = PROVIDER_INFO.get(pid)
+    if info is None:
+        raise HTTPException(400, f"Unknown provider '{provider}'.")
+    if not info.requires_key:  # mock
+        return {"ok": True, "provider": pid, "models": [{"id": "mock", "label": "Deterministic mock"}]}
+
+    rt = get_runtime()
+    key = (body.api_key or rt.api_key_for(pid)).strip()
+    if not key:
+        raise HTTPException(400, "Enter an API key to fetch this provider's models.")
+    try:
+        models = await build_provider(pid, key).list_models()
+        return {"ok": True, "provider": pid,
+                "models": [{"id": mid, "label": label} for mid, label in models]}
+    except Exception as exc:  # noqa: BLE001 — report as data so the UI can show it
+        return {"ok": False, "provider": pid, "models": [],
+                "error": f"{type(exc).__name__}: {exc}"[:300]}
+
+
+@app.get("/config")
+async def get_config() -> dict:
+    return get_runtime().public_snapshot()
+
+
+class ConfigUpdate(BaseModel):
+    provider: str | None = None
+    api_key: str | None = None
+    fast_model: str | None = None
+    deep_model: str | None = None
+    confidence_threshold: float | None = None
+    match_threshold: float | None = None
+    max_concurrency: int | None = None
+
+
+@app.put("/config")
+async def put_config(update: ConfigUpdate, request: Request) -> dict:
+    _require_admin(request)
+    try:
+        rt = update_runtime(**update.model_dump(exclude_none=True))
+    except ConfigError as exc:
+        raise HTTPException(400, str(exc))
+    log.info("config updated · provider=%s model=%s mock=%s",
+             rt.effective_provider, rt.active_fast_model, rt.mock_mode)
+    return rt.public_snapshot()
+
+
+class ConfigTest(BaseModel):
+    provider: str | None = None
+    api_key: str | None = None
+    model: str | None = None
+
+
+@app.post("/config/test")
+async def test_config(body: ConfigTest, request: Request) -> dict:
+    """Validate a provider/key/model with one tiny live call — never persisted.
+
+    Lets the dashboard offer a 'Test connection' button before saving, so a bad
+    key fails fast and visibly instead of silently degrading runs to mock."""
+    _require_admin(request)
+    rt = get_runtime()
+    pid = (body.provider or rt.provider).strip().lower()
+    if pid not in PROVIDER_INFO:
+        raise HTTPException(400, f"Unknown provider '{pid}'.")
+    if pid == "mock":
+        return {"ok": True, "provider": "mock", "model": "mock", "latency_ms": 0,
+                "detail": "Mock mode is deterministic and needs no API key."}
+
+    key = (body.api_key or rt.api_key_for(pid)).strip()
+    if not key:
+        raise HTTPException(400, "No API key was provided or configured for this provider.")
+    model = (body.model or rt.fast_models.get(pid) or PROVIDER_INFO[pid].default_fast)
+
+    provider = build_provider(pid, key)
+    started = time.perf_counter()
+    try:
+        resp = await provider.complete(
+            model=model, prompt="Reply with the single word: pong.", max_tokens=8
+        )
+        return {
+            "ok": True, "provider": pid, "model": model,
+            "latency_ms": int((time.perf_counter() - started) * 1000),
+            "detail": (resp.text or "").strip()[:80] or "(empty reply, but call succeeded)",
+        }
+    except Exception as exc:  # noqa: BLE001 — report failure as data, not a 500
+        return {
+            "ok": False, "provider": pid, "model": model,
+            "error": f"{type(exc).__name__}: {exc}"[:300],
+        }
 
 
 @app.post("/reconcile")
@@ -117,12 +267,12 @@ async def reconcile_endpoint(files: list[UploadFile] = File(...)) -> dict:
 
 
 async def process_run(run_id: str, docs: list[UploadedDoc]) -> None:
-    settings = get_settings()
+    rt = get_runtime()
     started = time.perf_counter()
     _remember(_status, run_id, {"state": "running", "documents": len(docs)})
     try:
         await bus.publish(run_id, "run.started", {"documents": len(docs)})
-        sem = asyncio.Semaphore(settings.ledger_max_concurrency)
+        sem = asyncio.Semaphore(rt.max_concurrency)
 
         async def work(doc: UploadedDoc) -> list:
             await bus.publish(run_id, "agent.cell.start", {"doc": doc.name})
@@ -146,7 +296,7 @@ async def process_run(run_id: str, docs: list[UploadedDoc]) -> None:
         extractions = [r for batch in batches for r in batch]
 
         # FAN-IN → reconciliation state machine.
-        result = await run_reconciliation(run_id, extractions, settings.ledger_match_threshold)
+        result = await run_reconciliation(run_id, extractions, rt.match_threshold)
         result.duration_ms = int((time.perf_counter() - started) * 1000)
         _remember(_results, run_id, result)
         _remember(_status, run_id, {"state": "completed", "documents": result.documents})

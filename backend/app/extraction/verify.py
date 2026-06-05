@@ -12,13 +12,14 @@ never silently posted (ARCHITECTURE.md §8).
 """
 from __future__ import annotations
 
-from ..config import get_settings
+from ..runtime import get_runtime
 from ..schemas import Transaction, TxnState
 
 
 def verify(txn: Transaction) -> Transaction:
-    settings = get_settings()
-    tau = settings.ledger_confidence_threshold
+    # Threshold comes from the live control plane, so it is tunable from the
+    # dashboard without a restart (defaults to the env/boot value).
+    tau = get_runtime().confidence_threshold
 
     # If a worker already quarantined it (e.g. schema drift), respect that.
     if txn.state == TxnState.QUARANTINE:
