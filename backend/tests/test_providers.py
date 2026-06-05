@@ -48,6 +48,11 @@ def test_pricing_known_and_unknown():
     # cost meter spans providers
     assert estimate_cost("gpt-4o", 1_000_000, 0) == 2.5
     assert estimate_cost("gemini-2.5-flash", 0, 1_000_000) == 2.5
+    # family fallback: dated/preview/"-latest" Gemini ids the live API returns
+    # still price by family instead of silently reading $0.
+    assert get_model_pricing("gemini-3.1-pro-preview-customtools") == (2.0, 12.0)
+    assert get_model_pricing("gemini-flash-latest") == (0.5, 3.0)
+    assert get_model_pricing("gemini-3.5-flash-preview-11-2026") == (1.5, 9.0)
 
 
 # ── The shared self-consistency guardrail (F1), provider-agnostic ────────────
@@ -190,13 +195,15 @@ async def test_google_complete_maps_fields_and_floors_token_budget():
             seen["config"] = kw.get("config")
             return _Boxes(
                 text="pong",
-                usage_metadata=_Boxes(prompt_token_count=15, candidates_token_count=4),
+                usage_metadata=_Boxes(prompt_token_count=15, candidates_token_count=4,
+                                      thoughts_token_count=10),
             )
 
     p = GoogleProvider(api_key="x")
     p._client = _Boxes(aio=_Boxes(models=FakeModels()))
     r = await p.complete(model="gemini-2.5-flash", prompt="ping", max_tokens=8)
-    assert r.text == "pong" and (r.input_tokens, r.output_tokens) == (15, 4)
+    # output tokens include the billed thinking tokens (4 answer + 10 thoughts).
+    assert r.text == "pong" and (r.input_tokens, r.output_tokens) == (15, 14)
     # Thinking-model headroom: a tiny max_tokens is floored so the model's internal
     # reasoning can't swallow the whole budget and return empty text (the real bug
     # that made every Gemini extraction silently degrade to mock).

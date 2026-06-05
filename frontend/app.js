@@ -68,7 +68,35 @@ $("file-input").addEventListener("change", (e) => setFiles([...e.target.files]))
     dz.classList.remove("drag");
   })
 );
-dz.addEventListener("drop", (e) => setFiles([...e.dataTransfer.files]));
+dz.addEventListener("drop", async (e) => setFiles(await filesFromDrop(e.dataTransfer)));
+
+// A dropped *folder* arrives in `dataTransfer.files` as a single unreadable
+// directory entry — uploading it throws and surfaces as "Could not reach the
+// API". Walk the directory tree via the entries API instead, so dropping
+// `sample_data/` uploads every file inside it (receipts, UPI, the bank CSV).
+async function filesFromDrop(dt) {
+  const items = dt.items;
+  if (!items || !items.length || typeof items[0].webkitGetAsEntry !== "function") {
+    return [...dt.files]; // older browsers: best-effort, no recursion
+  }
+  // Capture entries synchronously — they go invalid once the drop handler returns.
+  const roots = [...items].map((it) => it.webkitGetAsEntry()).filter(Boolean);
+  const out = [];
+  async function walk(entry) {
+    if (entry.isFile) {
+      out.push(await new Promise((res, rej) => entry.file(res, rej)));
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      let batch; // readEntries yields ≤100 entries per call → loop until empty
+      do {
+        batch = await new Promise((res, rej) => reader.readEntries(res, rej));
+        for (const e of batch) await walk(e);
+      } while (batch.length);
+    }
+  }
+  for (const r of roots) await walk(r);
+  return out.filter((f) => f.size > 0 && !/^\.|Thumbs\.db$/.test(f.name)); // drop junk
+}
 
 function setFiles(files) {
   selectedFiles = files;
@@ -103,7 +131,7 @@ async function startRun() {
     showError(
       reachable
         ? `Run could not start: ${err.message}`
-        : `Could not reach the API at ${API}. Is the backend running? (uvicorn app.main:app --port 8000)`
+        : `Could not reach the API at ${API || location.origin}. Is the backend running? (uvicorn app.main:app --port 8000)`
     );
     $("run-btn").disabled = false;
     return;

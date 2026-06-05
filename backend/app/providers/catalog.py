@@ -69,10 +69,15 @@ PROVIDER_INFO: dict[str, ProviderInfo] = {
         default_deep="gemini-2.5-pro",
         docs_url="https://aistudio.google.com/apikey",
         models=(
+            # Public list prices (USD / 1M tokens, input/output) as of 2026-06;
+            # the live list the dashboard fetches supersedes this for selection.
+            ModelInfo("gemini-3.1-pro", "Gemini 3.1 Pro", 2.00, 12.00),
+            ModelInfo("gemini-3.5-flash", "Gemini 3.5 Flash", 1.50, 9.00),
+            ModelInfo("gemini-3-flash", "Gemini 3 Flash", 0.50, 3.00),
+            ModelInfo("gemini-3.1-flash-lite", "Gemini 3.1 Flash-Lite", 0.25, 1.50),
             ModelInfo("gemini-2.5-pro", "Gemini 2.5 Pro", 1.25, 10.0),
             ModelInfo("gemini-2.5-flash", "Gemini 2.5 Flash", 0.30, 2.50),
             ModelInfo("gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite", 0.10, 0.40),
-            ModelInfo("gemini-2.0-flash", "Gemini 2.0 Flash", 0.10, 0.40),
         ),
     ),
     "openai": ProviderInfo(
@@ -116,5 +121,24 @@ for _info in PROVIDER_INFO.values():
 
 
 def get_model_pricing(model: str) -> tuple[float, float]:
-    """(price_in, price_out) per 1M tokens; (0, 0) for unknown / mock models."""
-    return _PRICING.get(model, (0.0, 0.0))
+    """(price_in, price_out) per 1M tokens.
+
+    Exact catalog match first; then a **family-level estimate** for the dated /
+    preview / "-latest" ids the live API returns (e.g.
+    "gemini-3.1-pro-preview-customtools", "gemini-flash-latest") so the cost meter
+    estimates instead of silently reading $0; else (0, 0) for genuinely unknown /
+    mock / deterministic models. Prices are approximate public list prices.
+    """
+    if model in _PRICING:
+        return _PRICING[model]
+    m = model.lower()
+    if "gemini" in m:                       # estimate by Gemini family
+        if "3.5-flash" in m:
+            return (1.50, 9.00)
+        if "flash-lite" in m:
+            return (0.10, 0.40)
+        if "pro" in m:
+            return (2.00, 12.00)            # gemini-3.x pro family
+        if "flash" in m:
+            return (0.50, 3.00)             # gemini-3.x flash family
+    return (0.0, 0.0)

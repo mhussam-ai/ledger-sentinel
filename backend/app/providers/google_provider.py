@@ -68,7 +68,12 @@ class GoogleProvider(LLMProvider):
             text = ""
         um = getattr(resp, "usage_metadata", None)
         tin = int(getattr(um, "prompt_token_count", 0) or 0)
+        # Thinking models bill their internal reasoning at the output rate, and the
+        # SDK reports it separately as `thoughts_token_count`. Count it so the cost
+        # meter reflects what Google actually charges (otherwise a 10s reasoning
+        # call looks like ~40 output tokens).
         tout = int(getattr(um, "candidates_token_count", 0) or 0)
+        tout += int(getattr(um, "thoughts_token_count", 0) or 0)
         return LLMResponse(text=text, input_tokens=tin, output_tokens=tout, model=model)
 
     async def list_models(self):
