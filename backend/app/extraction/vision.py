@@ -38,19 +38,28 @@ async def extract_receipt(
     text = data.decode("utf-8", errors="ignore")
     tokens_in = tokens_out = 0
     model = "mock"
+    degraded_from: str | None = None
+    error: str | None = None
 
     try:
         parsed, tokens_in, tokens_out, model = await provider.extract_receipt(
             text, source_type, fast_model=rt.active_fast_model, deep_model=rt.active_deep_model
         )
-    except Exception:  # noqa: BLE001 — degrade to the deterministic parse (F6)
+    except Exception as exc:  # noqa: BLE001 — degrade to the deterministic parse (F6)
         log.warning(
             "provider '%s' extraction failed for %s; degrading to deterministic parse",
             provider.id, name, exc_info=True,
         )
         parsed = parse_receipt_text(text)
         tokens_in = tokens_out = 0
-        model = "mock"
+        # Surface the fallback in AgentOps instead of letting a failed live
+        # provider masquerade as a clean mock run — that silent-degradation blind
+        # spot is exactly what an observability layer is supposed to catch. The
+        # model id becomes e.g. "google→mock", which shows in the trace + keeps
+        # the cost meter honest (unknown id → $0, since no real tokens were spent).
+        degraded_from = provider.id
+        error = f"{type(exc).__name__}: {exc}"[:200]
+        model = f"{provider.id}→mock"
 
     txn = Transaction(
         id=f"txn_{uuid.uuid4().hex[:8]}",
@@ -70,6 +79,9 @@ async def extract_receipt(
 
     latency_ms = int((time.perf_counter() - started) * 1000)
     faithfulness = score_faithfulness(txn)
+    extra = {"doc": name, "confidence": parsed["confidence"], "amount": str(parsed["amount"])}
+    if degraded_from:
+        extra.update(degraded=True, degraded_from=degraded_from, error=error)
     await emit_trace(
         run_id,
         span=f"extract:{name}",
@@ -78,7 +90,7 @@ async def extract_receipt(
         tokens_in=tokens_in,
         tokens_out=tokens_out,
         faithfulness=faithfulness,
-        extra={"doc": name, "confidence": parsed["confidence"], "amount": str(parsed["amount"])},
+        extra=extra,
     )
 
     return ExtractionResult(
@@ -91,4 +103,5 @@ async def extract_receipt(
         tokens_out=tokens_out,
         model=model,
         faithfulness=faithfulness,
+        error=error,
     )

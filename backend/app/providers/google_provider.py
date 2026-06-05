@@ -47,7 +47,14 @@ class GoogleProvider(LLMProvider):
         from google.genai import types  # lazy
 
         client = self._get_client()
-        cfg_kwargs: dict = {"max_output_tokens": max_tokens}
+        cfg_kwargs: dict = {
+            # Gemini 2.5 / 3.x are *thinking* models: the internal reasoning shares
+            # the output budget, so a small `max_output_tokens` gets fully consumed
+            # by thinking and `resp.text` comes back empty (finish_reason=MAX_TOKENS,
+            # which then fails JSON parsing). Floor the budget high enough that the
+            # actual answer always has room after the model finishes reasoning.
+            "max_output_tokens": max(max_tokens, 2048),
+        }
         if system:
             cfg_kwargs["system_instruction"] = system
         resp = await client.aio.models.generate_content(

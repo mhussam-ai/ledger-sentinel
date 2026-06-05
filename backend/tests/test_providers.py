@@ -179,12 +179,15 @@ async def test_openai_complete_maps_fields_and_token_param_fallback():
     assert seen["final_kwargs"].get("max_tokens") == 8
 
 
-async def test_google_complete_maps_fields():
+async def test_google_complete_maps_fields_and_floors_token_budget():
     pytest.importorskip("google.genai")
     from app.providers.google_provider import GoogleProvider
 
+    seen = {}
+
     class FakeModels:
         async def generate_content(self, **kw):
+            seen["config"] = kw.get("config")
             return _Boxes(
                 text="pong",
                 usage_metadata=_Boxes(prompt_token_count=15, candidates_token_count=4),
@@ -194,6 +197,10 @@ async def test_google_complete_maps_fields():
     p._client = _Boxes(aio=_Boxes(models=FakeModels()))
     r = await p.complete(model="gemini-2.5-flash", prompt="ping", max_tokens=8)
     assert r.text == "pong" and (r.input_tokens, r.output_tokens) == (15, 4)
+    # Thinking-model headroom: a tiny max_tokens is floored so the model's internal
+    # reasoning can't swallow the whole budget and return empty text (the real bug
+    # that made every Gemini extraction silently degrade to mock).
+    assert seen["config"].max_output_tokens >= 2048
 
 
 # ── Dynamic model listing (fake clients) — this is what fills the dropdown ───
@@ -277,3 +284,30 @@ async def test_google_list_models_filters_and_strips_prefix():
     for excluded in ("text-embedding-004", "gemini-2.5-flash-image",
                      "lyria-3-pro", "gemini-robotics-er-1.5", "gemini-2.5-flash-tts"):
         assert excluded not in ids
+
+
+# ── Graceful degradation is *observable* (F6 must not hide behind "mock") ─────
+async def test_vision_worker_surfaces_provider_degradation(monkeypatch):
+    """When a live provider call fails, the worker degrades to the deterministic
+    parse — but it must SAY so. A failed Gemini run masquerading as a clean mock
+    run is exactly the silent-degradation blind spot AgentOps has to catch."""
+    from app.extraction import vision
+    from app.providers.base import LLMProvider
+
+    class FailingProvider(LLMProvider):
+        id = "google"
+
+        async def complete(self, *, model, prompt, system=None, max_tokens=512):
+            raise RuntimeError("unused")
+
+        async def extract_receipt(self, *a, **k):
+            raise ValueError("no JSON object found in model response")
+
+    monkeypatch.setattr(vision, "get_provider", lambda: FailingProvider())
+    res = await vision.extract_receipt(
+        "run_x", "brew.txt", b"BREW & CO\nTOTAL  450.00\n", "receipt"
+    )
+    assert res.transaction is not None              # F6: the run still completed
+    assert res.model == "google→mock"          # fallback is visible, not just "mock"
+    assert res.error and "no JSON" in res.error      # the cause is captured
+    assert res.tokens_in == 0 and res.tokens_out == 0
