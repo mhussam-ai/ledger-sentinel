@@ -35,9 +35,10 @@ silently corrupting the ledger.
 | 🚀 **Parallel fan-out** | Every document gets its own extraction worker, run concurrently. 17 documents process in roughly the time of the slowest one. |
 | 🔍 **Self-verification** | Each amount is extracted twice and must agree; low-confidence fields are routed to a quarantine lane, never auto-posted. |
 | 🔗 **Cross-source reconciliation** | A matching agent links the bank line, the UPI screenshot, and the paper receipt for the *same* purchase, collapsing duplicates. |
-| 🧱 **Schema-drift firewall** | Bank CSVs change columns without warning. A Pandera contract detects drift and quarantines bad rows instead of crashing. |
+| 🧩 **Schema-drift firewall** | Bank CSVs change columns without warning. A Pandera contract detects drift and quarantines bad rows instead of crashing. |
 | 📊 **AgentOps built in** | Every reasoning step is traced, scored (faithfulness / confidence), timed, and costed — visible live on the dashboard. |
 | 🎯 **Gated evals** | A labeled golden set scores quarantine precision/recall, extraction exactness, and link F1 on every run; the safety metric (quarantine recall) is a hard CI gate. |
+| 🔌 **Pluggable model providers** | Choose **Anthropic, Google Gemini, OpenAI, or Mock** from the dashboard — paste a key, **fetch the models that key can actually use**, pick one from a dropdown, and the agent switches live with no restart. Default is always mock; nothing about the model stack is decided from the environment. One uniform provider contract; the pipeline never imports an SDK. |
 | 🔁 **Durable runs** | Execution is decoupled from the live stream and backed by a replay buffer — a late, dropped, or proxy-blocked dashboard still gets the full picture (or polls the result). |
 | 🛟 **Graceful degradation** | No API key? It runs in deterministic mock mode so the demo never dies on stage. Transient model errors retry with backoff, then degrade — the run always completes. |
 
@@ -45,7 +46,7 @@ silently corrupting the ledger.
 
 ```
    Upload pile ──► FAN-OUT (1 worker / doc, parallel)
-                       │  receipts/PDF → Claude vision
+                       │  receipts/PDF → vision (configured provider)
                        │  bank CSV     → Pandera schema contract
                        ▼
                   SELF-VERIFY  ──(low confidence)──► QUARANTINE ──► human review
@@ -74,7 +75,8 @@ math, and trade-offs live in **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
 ```bash
 git clone https://github.com/mhussam-ai/ledger-sentinel
 cd ledger-sentinel
-cp .env.example .env        # add ANTHROPIC_API_KEY (optional — mock mode works without)
+cp .env.example .env        # ops-only config; no keys here. Boots in mock mode —
+                            # pick provider + key + model live in the dashboard ⚙️
 
 # One command, full stack:
 docker compose up
@@ -92,7 +94,7 @@ cd frontend && python -m http.server 5173      # fully static — no build step
 ```bash
 # Prove correctness without a server — deterministic, no API key:
 cd backend
-pytest -q                      # unit + end-to-end + eval gates (16 tests)
+pytest -q                      # unit + end-to-end + provider + eval gates (45 tests)
 python -m evals.run            # the gated eval scorecard
 python -m scripts.run_local    # offline terminal demo of the full pipeline
 ```
@@ -113,10 +115,12 @@ ledger-sentinel/
 ├── ARCHITECTURE.md        # system design, diagrams, scale, trade-offs, failure modes
 ├── backend/
 │   ├── app/
-│   │   ├── main.py        # FastAPI: decoupled run launch + SSE replay tail
+│   │   ├── main.py        # FastAPI: decoupled run launch + SSE replay tail + /config control plane
 │   │   ├── events.py      # event bus with per-run replay buffer (durable runs)
 │   │   ├── schemas.py     # Pydantic canonical models (the contract)
-│   │   ├── extraction/    # Claude vision · CSV/Pandera drift · self-verify · retry/backoff
+│   │   ├── runtime.py     # control plane: live provider/key/model selection (plug-and-play)
+│   │   ├── providers/     # uniform LLMProvider contract → Anthropic · Google · OpenAI · Mock
+│   │   ├── extraction/    # vision (any provider) · CSV/Pandera drift · self-verify · retry/backoff
 │   │   └── graph/         # LangGraph reconciliation state machine + fuzzy matching
 │   ├── evals/             # golden dataset · metrics · gated scorecard (python -m evals.run)
 │   └── tests/             # unit + end-to-end + eval-gate regression tests
@@ -130,7 +134,8 @@ ledger-sentinel/
 
 ## 🛠️ Built on (and grateful for)
 
-[Anthropic Claude](https://www.anthropic.com) · [LangGraph](https://github.com/langchain-ai/langgraph) ·
+[Anthropic Claude](https://www.anthropic.com) · [Google Gemini](https://ai.google.dev) ·
+[OpenAI](https://platform.openai.com) · [LangGraph](https://github.com/langchain-ai/langgraph) ·
 [Pandera](https://github.com/unionai-oss/pandera) · [Langfuse](https://github.com/langfuse/langfuse) ·
 [RapidFuzz](https://github.com/rapidfuzz/RapidFuzz) · [FastAPI](https://github.com/fastapi/fastapi)
 

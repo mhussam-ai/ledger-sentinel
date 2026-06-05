@@ -21,7 +21,8 @@
       </div>
     </div>
     <div class="controls">
-      <span id="mode-badge" class="badge badge-muted">connecting…</span>
+      <button type="button" id="mode-badge" class="badge badge-muted" title="Configure the model provider">connecting…</button>
+      <button type="button" id="settings-btn" class="icon-btn" title="Model provider settings">⚙️</button>
       <label class="upload-btn">
         <input type="file" id="file-input" multiple hidden />
         Upload pile
@@ -29,6 +30,54 @@
       <button id="run-btn" class="run-btn" disabled>Reconcile</button>
     </div>
   </header>
+
+  <!-- Provider control plane: pick provider · paste key · choose models -->
+  <div id="settings-overlay" class="modal-overlay hidden">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <header class="modal-head">
+        <h2 id="settings-title">⚙️ Model provider</h2>
+        <button type="button" id="settings-close" class="icon-btn" title="Close">✕</button>
+      </header>
+      <p class="modal-sub">
+        Choose a provider, paste a key, pick your models. Plug-and-play — the agent
+        switches live, no restart. No key? It stays in deterministic <b>mock mode</b>.
+      </p>
+
+      <label class="field">
+        <span>Provider</span>
+        <select id="cfg-provider"></select>
+      </label>
+
+      <label class="field">
+        <span>API key <em id="cfg-key-status" class="key-status"></em></span>
+        <div class="key-row">
+          <input id="cfg-key" type="password" autocomplete="off" spellcheck="false" placeholder="paste API key…" />
+          <button type="button" id="cfg-fetch" class="btn-ghost">Fetch models</button>
+        </div>
+        <a id="cfg-key-docs" class="field-hint" target="_blank" rel="noopener">Where do I get a key? ↗</a>
+      </label>
+
+      <div class="field-row">
+        <label class="field">
+          <span>Fast model <small>clean docs</small></span>
+          <select id="cfg-fast"></select>
+        </label>
+        <label class="field">
+          <span>Deep model <small>hard docs</small></span>
+          <select id="cfg-deep"></select>
+        </label>
+      </div>
+
+      <div id="cfg-msg" class="cfg-msg hidden"></div>
+
+      <footer class="modal-foot">
+        <button type="button" id="cfg-test" class="btn-ghost">Test connection</button>
+        <span class="spacer"></span>
+        <button type="button" id="cfg-cancel" class="btn-ghost">Cancel</button>
+        <button type="button" id="cfg-save" class="btn-primary">Save</button>
+      </footer>
+    </div>
+  </div>
 
   <div id="error-banner" class="error-banner hidden"></div>
 
