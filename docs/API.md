@@ -226,7 +226,7 @@ Liveness + the effective mode (what the pipeline will actually use right now).
 
 ## Data models
 
-Canonical shapes (Pydantic; see [`backend/app/schemas.py`](backend/app/schemas.py)).
+Canonical shapes (Pydantic; see [`backend/app/schemas.py`](../backend/app/schemas.py)).
 `amount` is always a **`Decimal`-precise string** in JSON — money is never a float.
 
 ### `Transaction`

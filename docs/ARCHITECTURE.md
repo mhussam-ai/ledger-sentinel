@@ -10,7 +10,7 @@
 > fenced off everywhere it is weak (arithmetic, final authority) by
 > deterministic guardrails. *The LLM proposes; deterministic code disposes.*
 
-**Companion docs:** [README](./README.md) (overview & quickstart) ·
+**Companion docs:** [README](../README.md) (overview & quickstart) ·
 [API.md](./API.md) (REST + SSE reference) · [DEPLOY.md](./DEPLOY.md) (ship it free) ·
 [CONTRIBUTING.md](./CONTRIBUTING.md) (extend it) · [SECURITY.md](./SECURITY.md) ·
 [DEMO.md](./DEMO.md) (video script)

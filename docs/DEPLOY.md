@@ -7,7 +7,7 @@ optionally plug in their own provider key from the dashboard.
 
 The whole app ships as **one image, one origin**: FastAPI serves the API *and*
 the vanilla-JS dashboard from the same URL (see the `StaticFiles` mount at the
-bottom of [`backend/app/main.py`](backend/app/main.py)). Free hosts only expose
+bottom of [`backend/app/main.py`](../backend/app/main.py)). Free hosts only expose
 a single HTTPS port, and single-origin means no CORS and one link to share.
 
 ---
@@ -25,8 +25,8 @@ Result: a public URL like `https://<your-hf-username>-ledger-sentinel.hf.space`.
 6. **Create Space**. You now have an empty Space git repo.
 
 The Space reads its config from the YAML front-matter at the top of
-[`README.md`](README.md) (`sdk: docker`, `app_port: 7860`) and builds the
-root [`Dockerfile`](Dockerfile) — both are already in this repo, so there is
+[`README.md`](../README.md) (`sdk: docker`, `app_port: 7860`) and builds the
+root [`Dockerfile`](../Dockerfile) — both are already in this repo, so there is
 nothing to edit.
 
 ### 2. Push this repo to the Space
