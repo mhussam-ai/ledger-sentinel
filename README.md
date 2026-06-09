@@ -25,6 +25,7 @@ to post a number it can't prove.**
 
 _The LLM proposes; deterministic code disposes._
 
+[![Live Demo](https://img.shields.io/badge/live%20demo-online-brightgreen?logo=huggingface&logoColor=white)](https://huggingface.co/spaces/mhussam-ai/ledger-sentinel)
 [![CI](https://github.com/mhussam-ai/ledger-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/mhussam-ai/ledger-sentinel/actions/workflows/ci.yml)
 ![Tests](https://img.shields.io/badge/tests-46%20passing-brightgreen)
 ![Eval gates](https://img.shields.io/badge/eval%20gates-PASS-brightgreen)
@@ -33,7 +34,7 @@ _The LLM proposes; deterministic code disposes._
 ![Frontend](https://img.shields.io/badge/frontend-no%20build%20step-ff69b4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-[Architecture](./docs/ARCHITECTURE.md) · [API reference](./docs/API.md) · [Quickstart](#-quickstart) · [How it works](#-how-it-works) · [Deploy](./docs/DEPLOY.md) · [Demo script](./docs/DEMO.md) · [Contributing](./docs/CONTRIBUTING.md)
+[**▶ Live Demo**](https://huggingface.co/spaces/mhussam-ai/ledger-sentinel) · [Architecture](./docs/ARCHITECTURE.md) · [API reference](./docs/API.md) · [Quickstart](#-quickstart) · [How it works](#-how-it-works) · [Deploy](./docs/DEPLOY.md) · [Demo script](./docs/DEMO.md) · [Contributing](./docs/CONTRIBUTING.md)
 
 <br/>
 
@@ -43,10 +44,10 @@ _The LLM proposes; deterministic code disposes._
 
 </div>
 
-> **▶ Live demo:** the app boots in deterministic **mock mode** — no API key, no
-> network, no billing — so it runs the moment it loads. **[Deploy your own free
-> live demo in ~5 minutes →](./docs/DEPLOY.md)** (one-click Hugging Face Space.)
-<!-- After deploying, drop your Space URL and the walkthrough-video link here. -->
+> **▶ Live demo → [huggingface.co/spaces/mhussam-ai/ledger-sentinel](https://huggingface.co/spaces/mhussam-ai/ledger-sentinel)**
+> The app boots in deterministic **mock mode** — no API key, no network, no
+> billing — so the full reconcile pipeline runs in your browser the moment it
+> loads. Want your own? **[Deploy a free Space in ~5 minutes →](./docs/DEPLOY.md)**.
 
 ---
 
