@@ -12,7 +12,8 @@
 
 **Companion docs:** [README](../README.md) (overview & quickstart) ·
 [API.md](./API.md) (REST + SSE reference) · [DEPLOY.md](./DEPLOY.md) (ship it free) ·
-[CONTRIBUTING.md](./CONTRIBUTING.md) (extend it) · [SECURITY.md](./SECURITY.md) ·
+[CONTRIBUTING.md](./CONTRIBUTING.md) (extend it) · [CONFIGURATION.md](./CONFIGURATION.md) (settings) ·
+[TROUBLESHOOTING.md](./TROUBLESHOOTING.md) (fixes) · [SECURITY.md](./SECURITY.md) ·
 [DEMO.md](./DEMO.md) (video script)
 
 ## Contents

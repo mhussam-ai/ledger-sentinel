@@ -26,7 +26,7 @@ to post a number it can't prove.**
 _The LLM proposes; deterministic code disposes._
 
 [![CI](https://github.com/mhussam-ai/ledger-sentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/mhussam-ai/ledger-sentinel/actions/workflows/ci.yml)
-![Tests](https://img.shields.io/badge/tests-45%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-46%20passing-brightgreen)
 ![Eval gates](https://img.shields.io/badge/eval%20gates-PASS-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.13-blue)
 ![Providers](https://img.shields.io/badge/models-Claude%20%C2%B7%20Gemini%20%C2%B7%20GPT%20%C2%B7%20Mock-7c3aed)
@@ -100,7 +100,7 @@ table maps what Damco said it looks for to where it lives in this repo.
 | **Principle** | The LLM proposes; deterministic code disposes — no number is POSTED unless it can be proven |
 | **Stack** | FastAPI · LangGraph · Pandera · RapidFuzz · Pydantic · vanilla-JS dashboard (no build) |
 | **Models** | Anthropic Claude · Google Gemini · OpenAI GPT · deterministic Mock — switchable live from the dashboard |
-| **Tests / evals** | `45` passing · `5` gated eval metrics (safety gate = quarantine recall ≥ 1.0) |
+| **Tests / evals** | `46` passing · `5` gated eval metrics (safety gate = quarantine recall ≥ 1.0) |
 | **Run anywhere** | Boots to mock mode: no API key, no network, deterministic every time |
 | **Deploy** | One image, one origin → free Hugging Face Space (Render / Cloud Run ready) |
 
@@ -181,6 +181,8 @@ python -m scripts.run_local    # offline terminal demo of the full pipeline
 | **[DEPLOY.md](./docs/DEPLOY.md)** | Operators | Ship a free live demo to a Hugging Face Space in ~5 min (Render / Cloud Run too) |
 | **[DEMO.md](./docs/DEMO.md)** | The 5–10 min video | A beat-by-beat recording script + a live-Q&A trade-off cheat sheet |
 | **[CONTRIBUTING.md](./docs/CONTRIBUTING.md)** | Engineers | Dev setup, the test/eval workflow, and **adding a model provider in one method** |
+| **[CONFIGURATION.md](./docs/CONFIGURATION.md)** | Operators | Every setting — ops env vars vs. dashboard-driven model config — with defaults |
+| **[TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md)** | Everyone | Symptom → cause → fix for the real issues (venv, live providers, uploads, deploy) |
 | **[SECURITY.md](./docs/SECURITY.md)** | Security reviewers | Secret handling, data governance, the human-in-the-loop gate, disclosure |
 
 ## 📁 Repository layout
@@ -193,6 +195,8 @@ ledger-sentinel/
 │   ├── DEPLOY.md              # free live demo (Hugging Face Space) + AWS path
 │   ├── DEMO.md                # the 5–10 min video script + Q&A cheat sheet
 │   ├── CONTRIBUTING.md        # dev workflow + "add a provider in one method"
+│   ├── CONFIGURATION.md       # every setting: ops env vars vs dashboard model config
+│   ├── TROUBLESHOOTING.md     # symptom → cause → fix for the real issues
 │   └── SECURITY.md            # secret handling, data governance, disclosure
 ├── Dockerfile             # single image: API + dashboard, one origin (the live demo)
 ├── docker-compose.yml     # one-command local stack (same image as prod)
