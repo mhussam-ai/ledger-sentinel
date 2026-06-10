@@ -35,7 +35,7 @@ _The LLM proposes; deterministic code disposes._
 ![Frontend](https://img.shields.io/badge/frontend-no%20build%20step-ff69b4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-[**▶ Live Demo**](https://huggingface.co/spaces/mhussam-ai/ledger-sentinel) · [**🎬 Demo video**](https://mhussam-ai-ledger-sentinel.hf.space/ledger-sentinel-demo.mp4) · [Architecture](./docs/ARCHITECTURE.md) · [API reference](./docs/API.md) · [Quickstart](#-quickstart) · [How it works](#-how-it-works) · [Deploy](./docs/DEPLOY.md) · [Demo script](./docs/DEMO.md) · [Contributing](./docs/CONTRIBUTING.md)
+[**▶ Live Demo**](https://huggingface.co/spaces/mhussam-ai/ledger-sentinel) · [**🎬 Demo video**](https://mhussam-ai-ledger-sentinel.hf.space/ledger-sentinel-demo.mp4) · [Architecture](./docs/ARCHITECTURE.md) · [API reference](./docs/API.md) · [Quickstart](#-quickstart) · [How it works](#-how-it-works) · [Deploy](./docs/DEPLOY.md) · [Contributing](./docs/CONTRIBUTING.md)
 
 <br/>
 
@@ -186,7 +186,6 @@ python -m scripts.run_local    # offline terminal demo of the full pipeline
 | **[ARCHITECTURE.md](./docs/ARCHITECTURE.md)** | Tech Lead reviewers | Diagrams, the state machine, scale math, 8 failure modes + guardrails, evals, trade-offs, rejected alternatives |
 | **[API.md](./docs/API.md)** | Integrators | Every REST endpoint, the SSE event protocol, the runtime control plane, `curl` examples |
 | **[DEPLOY.md](./docs/DEPLOY.md)** | Operators | Ship a free live demo to a Hugging Face Space in ~5 min (Render / Cloud Run too) |
-| **[DEMO.md](./docs/DEMO.md)** | The 5–10 min video | A beat-by-beat recording script + a live-Q&A trade-off cheat sheet |
 | **[CONTRIBUTING.md](./docs/CONTRIBUTING.md)** | Engineers | Dev setup, the test/eval workflow, and **adding a model provider in one method** |
 | **[CONFIGURATION.md](./docs/CONFIGURATION.md)** | Operators | Every setting — ops env vars vs. dashboard-driven model config — with defaults |
 | **[TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md)** | Everyone | Symptom → cause → fix for the real issues (venv, live providers, uploads, deploy) |
@@ -200,12 +199,10 @@ ledger-sentinel/
 │   ├── ARCHITECTURE.md        # system design, diagrams, scale, trade-offs, failure modes
 │   ├── API.md                 # REST + SSE reference, control-plane flow, curl examples
 │   ├── DEPLOY.md              # free live demo (Hugging Face Space) + AWS path
-│   ├── DEMO.md                # the 5–10 min video script + Q&A cheat sheet
 │   ├── CONTRIBUTING.md        # dev workflow + "add a provider in one method"
 │   ├── CONFIGURATION.md       # every setting: ops env vars vs dashboard model config
 │   ├── TROUBLESHOOTING.md     # symptom → cause → fix for the real issues
-│   ├── SECURITY.md            # secret handling, data governance, disclosure
-│   └── specs/                 # design specs (e.g. real-document ingestion)
+│   └── SECURITY.md            # secret handling, data governance, disclosure
 ├── Dockerfile             # single image: API + dashboard, one origin (the live demo)
 ├── docker-compose.yml     # one-command local stack (same image as prod)
 ├── .github/workflows/     # CI: pytest + gated eval scorecard on every push
