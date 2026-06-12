@@ -277,13 +277,18 @@
       <div class="fmgrid">
         <div class="fm reveal"><span class="fmid">F1</span><b>Vision misreads a digit</b><p>Amount extracted twice; if the reads disagree → quarantine.</p></div>
         <div class="fm reveal" style="--i:1"><span class="fmid">F2</span><b>Double-counted purchase</b><p>Fuzzy match across sources collapses duplicates to one.</p></div>
+        <!-- F3..F13 follow in numeric order; F13 spans the row as the closer. -->
         <div class="fm reveal" style="--i:2"><span class="fmid">F3</span><b>Cross-source conflict</b><p>₹450 vs ₹540 → anomaly → both quarantined with evidence.</p></div>
-        <div class="fm reveal" style="--i:3"><span class="fmid">F5</span><b>Bank CSV schema drift</b><p>Pandera contract + fuzzy header recovery; self-heals or quarantines.</p></div>
-        <div class="fm reveal" style="--i:4"><span class="fmid">F6</span><b>Model rate-limit / 5xx</b><p>Retry with backoff + jitter, then degrade — the run always completes.</p></div>
-        <div class="fm reveal" style="--i:5"><span class="fmid">F8</span><b>Dashboard connects late</b><p>Decoupled execution + per-run replay buffer; or it polls the result.</p></div>
-        <div class="fm reveal" style="--i:6"><span class="fmid">F9</span><b>Pixels with no reader</b><p>A photo or scan mock mode can't read → quarantined with the reason on the card. Never fabricated.</p></div>
-        <div class="fm reveal" style="--i:7"><span class="fmid">F10</span><b>Non-financial document</b><p>The vision pass classifies first; a random screenshot is refused — not hallucinated into a transaction.</p></div>
-        <div class="fm reveal" style="--i:8"><span class="fmid">F12</span><b>PII in outbound prompts</b><p>Account numbers, PAN, IFSC, phones, emails redacted before any text reaches a live model.</p></div>
+        <div class="fm reveal" style="--i:3"><span class="fmid">F4</span><b>Hallucinated field</b><p>Output is schema-constrained and every claim must cite evidence; uncited claims never reach VERIFIED.</p></div>
+        <div class="fm reveal" style="--i:4"><span class="fmid">F5</span><b>Bank CSV schema drift</b><p>Pandera contract + fuzzy header recovery; self-heals or quarantines.</p></div>
+        <div class="fm reveal" style="--i:5"><span class="fmid">F6</span><b>Model rate-limit / 5xx</b><p>Retry with backoff + jitter, then degrade — the run always completes.</p></div>
+        <div class="fm reveal" style="--i:6"><span class="fmid">F7</span><b>No / wrong API key</b><p>A keyless or bad provider collapses to deterministic mock — a misconfiguration is a safe no-op, never an outage.</p></div>
+        <div class="fm reveal" style="--i:7"><span class="fmid">F8</span><b>Dashboard connects late</b><p>Decoupled execution + per-run replay buffer; or it polls the result.</p></div>
+        <div class="fm reveal" style="--i:8"><span class="fmid">F9</span><b>Pixels with no reader</b><p>A photo or scan mock mode can't read → quarantined with the reason on the card. Never fabricated.</p></div>
+        <div class="fm reveal" style="--i:9"><span class="fmid">F10</span><b>Non-financial document</b><p>The vision pass classifies first; a random screenshot is refused — not hallucinated into a transaction.</p></div>
+        <div class="fm reveal" style="--i:10"><span class="fmid">F11</span><b>Statement row drift</b><p>Every statement amount is re-read independently; a disagreeing row quarantines alone, a count mismatch collapses them all.</p></div>
+        <div class="fm reveal" style="--i:11"><span class="fmid">F12</span><b>PII in outbound prompts</b><p>Account numbers, PAN, IFSC, phones, emails redacted before any text reaches a live model.</p></div>
+        <div class="fm reveal" style="--i:12; grid-column: 1 / -1"><span class="fmid">F13</span><b>Hostile / oversized uploads</b><p>Routing trusts magic bytes, never filenames — unknown binaries quarantine with a reason; per-file size and per-run count caps return structured errors, and an over-cap PDF is refused rather than silently truncated.</p></div>
       </div>
       <div class="roadmap reveal">
         <b>What I'd build next, honestly:</b> confidence <em>calibration</em> against a larger labeled set ·
