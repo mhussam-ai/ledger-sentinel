@@ -191,13 +191,15 @@ section[id], header[id] { scroll-margin-top: 84px; }
 .msl { display: block; font-size: 11.5px; color: var(--muted); margin-top: 8px; text-transform: uppercase; letter-spacing: .8px; }
 
 /* ── Failure modes ──────────────────────────────────────────────────── */
-.fmgrid { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.fm { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; transition: transform .2s var(--ease), border-color .2s; }
+.fmgrid { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.fm { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; transition: transform .2s var(--ease), border-color .2s; }
 .fm:hover { transform: translateY(-3px); border-color: rgba(255,68,56,.4); }
-.fmid { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--red); background: var(--red-soft); padding: 3px 9px; border-radius: 6px; }
-.fm b { display: block; font-family: var(--font-display); font-size: 15.5px; margin: 12px 0 0; }
-.fm p { color: var(--muted); font-size: 13.5px; line-height: 1.55; margin: 7px 0 0; }
-.roadmap { max-width: 1000px; margin: 36px auto 0; border-left: 3px solid var(--amber); background: var(--amber-soft); padding: 16px 20px; border-radius: 10px; color: var(--text); font-size: 14.5px; line-height: 1.75; }
+.fmid { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--red); background: var(--red-soft); padding: 2px 7px; border-radius: 5px; vertical-align: middle; margin-right: 7px; white-space: nowrap; }
+.fm b { font-family: var(--font-display); font-size: 13.5px; vertical-align: middle; }
+.fm p { color: var(--muted); font-size: 12px; line-height: 1.48; margin: 5px 0 0; }
+#honest.sec { padding-bottom: 70px; }
+#honest .sec-head { margin-bottom: 38px; }
+.roadmap { max-width: 1000px; margin: 24px auto 0; border-left: 3px solid var(--amber); background: var(--amber-soft); padding: 14px 18px; border-radius: 10px; color: var(--text); font-size: 14.5px; line-height: 1.75; }
 .roadmap b { font-family: var(--font-display); color: var(--amber); }
 .roadmap em { font-style: italic; color: var(--green); }
 
@@ -216,6 +218,9 @@ section[id], header[id] { scroll-margin-top: 84px; }
 @keyframes wordin { to { opacity: 1; transform: none; } }
 
 /* ── Responsive ────────────────────────────────────────────────────── */
+@media (max-width: 1040px) {
+  .fmgrid { grid-template-columns: repeat(3, 1fr); }
+}
 @media (max-width: 920px) {
   .sec-grid { grid-template-columns: 1fr; gap: 36px; }
   .steps { grid-template-columns: 1fr; }
