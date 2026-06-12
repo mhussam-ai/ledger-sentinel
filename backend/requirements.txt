@@ -27,7 +27,7 @@ pandera==0.31.1
 # ── Real-document ingestion ─────────────────────────────────
 # Text-layer probe + extraction for PDF uploads (pure-Python, BSD). Scanned
 # PDFs/images go to the configured provider as native vision attachments.
-pypdf==6.10.2
+pypdf==6.12.0
 
 # ── Fuzzy reconciliation ──────────────────────────────────
 rapidfuzz==3.14.5
